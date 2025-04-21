@@ -4,3 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+hidapi = "2.6.3"
+image = { version = "0.25.6", default-features = false, features = ["bmp", "jpeg"] }
