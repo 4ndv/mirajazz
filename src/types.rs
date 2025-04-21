@@ -1,4 +1,27 @@
-/// Image format used by the Stream Deck
+/// Type of input that the device produced
+#[derive(Clone, Debug)]
+pub enum DeviceInput {
+    /// No data was passed from the device
+    NoData,
+
+    /// Button was pressed
+    ButtonStateChange(Vec<bool>),
+
+    /// Encoder/Knob was pressed
+    EncoderStateChange(Vec<bool>),
+
+    /// Encoder/Knob was twisted/turned
+    EncoderTwist(Vec<i8>),
+}
+
+impl DeviceInput {
+    /// Checks if there's data received or not
+    pub fn is_empty(&self) -> bool {
+        matches!(self, DeviceInput::NoData)
+    }
+}
+
+/// Image format used by the device
 #[derive(Copy, Clone, Debug, Hash)]
 pub struct ImageFormat {
     /// Image format/mode

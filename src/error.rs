@@ -2,6 +2,7 @@ use std::{
     error::Error,
     fmt::{Display, Formatter},
     str::Utf8Error,
+    sync::PoisonError,
 };
 
 use hidapi::HidError;
@@ -27,9 +28,6 @@ pub enum MirajazzError {
 
     /// Key index is invalid
     InvalidKeyIndex,
-
-    /// Key index is invalid
-    InvalidTouchPointIndex,
 
     /// Unrecognized Product ID
     UnrecognizedPID,
@@ -64,5 +62,11 @@ impl From<Utf8Error> for MirajazzError {
 impl From<ImageError> for MirajazzError {
     fn from(e: ImageError) -> Self {
         Self::ImageError(e)
+    }
+}
+
+impl<T> From<PoisonError<T>> for MirajazzError {
+    fn from(_value: PoisonError<T>) -> Self {
+        Self::PoisonError
     }
 }
