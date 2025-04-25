@@ -70,7 +70,7 @@ fn main() {
                     |key, state| {
                         println!("Key {}, state {}", key, state);
 
-                        DeviceInput::NoData
+                        Ok(DeviceInput::NoData)
                     },
                     false,
                 ) {

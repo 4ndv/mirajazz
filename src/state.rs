@@ -43,7 +43,7 @@ impl DeviceStateReader {
     pub fn read(
         &self,
         timeout: Option<Duration>,
-        process_input: impl Fn(u8, u8) -> DeviceInput,
+        process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
         supports_both_states: bool,
     ) -> Result<Vec<DeviceStateUpdate>, MirajazzError> {
         let input = self.device.read_input(timeout, process_input)?;

@@ -186,7 +186,7 @@ impl Device {
     pub fn read_input(
         &self,
         timeout: Option<Duration>,
-        process_input: impl Fn(u8, u8) -> DeviceInput,
+        process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
     ) -> Result<DeviceInput, MirajazzError> {
         self.initialize()?;
 
@@ -196,7 +196,7 @@ impl Device {
             return Ok(DeviceInput::NoData);
         }
 
-        Ok(process_input(data[9], data[10]))
+        Ok(process_input(data[9], data[10])?)
     }
 
     /// Resets the device
