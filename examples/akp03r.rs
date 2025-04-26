@@ -36,7 +36,7 @@ fn main() {
 
         // Connect to the device
         let device =
-            Device::connect(&hidapi, vid, pid, &serial, true, 6, 3).expect("Failed to connect");
+            Device::connect(&hidapi, vid, pid, &serial, true, 9, 3).expect("Failed to connect");
         // Print out some info from the device
         println!(
             "Connected to '{}' with version '{}'",
