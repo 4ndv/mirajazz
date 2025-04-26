@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2025-04-26
+
+### 🐛 Bug Fixes
+
+- Fixed input handling for devices that does not support both button states
+
+### ⚙️ Miscellaneous Tasks
+
+- Fixed button count in example
+- Added chore(ver) exclusion in cliff
+
 ## [0.2.0] - 2025-04-25
 
 ### 🚀 Features
