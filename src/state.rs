@@ -46,7 +46,10 @@ impl DeviceStateReader {
         process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
         supports_both_states: bool,
     ) -> Result<Vec<DeviceStateUpdate>, MirajazzError> {
-        let input = self.device.read_input(timeout, process_input)?;
+        let input = self
+            .device
+            .read_input(timeout, process_input, supports_both_states)?;
+
         let mut my_states = self.states.lock()?;
 
         let mut updates = vec![];

@@ -187,6 +187,7 @@ impl Device {
         &self,
         timeout: Option<Duration>,
         process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
+        supports_both_states: bool,
     ) -> Result<DeviceInput, MirajazzError> {
         self.initialize()?;
 
@@ -196,7 +197,13 @@ impl Device {
             return Ok(DeviceInput::NoData);
         }
 
-        Ok(process_input(data[9], data[10])?)
+        let state = if supports_both_states {
+            data[10]
+        } else {
+            0x1u8
+        };
+
+        Ok(process_input(data[9], state)?)
     }
 
     /// Resets the device
