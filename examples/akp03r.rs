@@ -35,8 +35,8 @@ fn main() {
         println!("Connecting to {:04X}:{:04X}, {}", vid, pid, serial);
 
         // Connect to the device
-        let device =
-            Device::connect(&hidapi, vid, pid, &serial, true, 9, 3).expect("Failed to connect");
+        let device = Device::connect(&hidapi, vid, pid, &serial, true, false, 9, 3)
+            .expect("Failed to connect");
         // Print out some info from the device
         println!(
             "Connected to '{}' with version '{}'",
@@ -65,15 +65,11 @@ fn main() {
             let reader = device.get_reader();
 
             loop {
-                match reader.read(
-                    Some(Duration::from_secs_f64(100.0)),
-                    |key, state| {
-                        println!("Key {}, state {}", key, state);
+                match reader.read(Some(Duration::from_secs_f64(100.0)), |key, state| {
+                    println!("Key {}, state {}", key, state);
 
-                        Ok(DeviceInput::NoData)
-                    },
-                    false,
-                ) {
+                    Ok(DeviceInput::NoData)
+                }) {
                     Ok(updates) => updates,
                     Err(_) => break,
                 };

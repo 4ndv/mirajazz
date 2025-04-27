@@ -70,6 +70,8 @@ pub struct Device {
     pub pid: u16,
     /// Use v2 hacks
     is_v2: bool,
+    /// Emits two events for buttons or not
+    supports_both_states: bool,
     /// Number of keys
     key_count: usize,
     /// Number of encoders
@@ -93,6 +95,7 @@ impl Device {
         pid: u16,
         serial: &str,
         is_v2: bool,
+        supports_both_states: bool,
         key_count: usize,
         encoder_count: usize,
     ) -> Result<Device, MirajazzError> {
@@ -102,6 +105,7 @@ impl Device {
             vid,
             pid,
             is_v2,
+            supports_both_states,
             key_count,
             encoder_count,
             packet_size: if is_v2 { 1024 } else { 512 },
@@ -182,12 +186,16 @@ impl Device {
         Ok(())
     }
 
+    /// Returns value of `supports_both_states`
+    pub fn supports_both_states(&self) -> bool {
+        self.supports_both_states
+    }
+
     /// Reads current input state from the device and calls provided function for processing
     pub fn read_input(
         &self,
         timeout: Option<Duration>,
         process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
-        supports_both_states: bool,
     ) -> Result<DeviceInput, MirajazzError> {
         self.initialize()?;
 
@@ -197,7 +205,7 @@ impl Device {
             return Ok(DeviceInput::NoData);
         }
 
-        let state = if supports_both_states {
+        let state = if self.supports_both_states() {
             data[10]
         } else {
             0x1u8

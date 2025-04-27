@@ -44,11 +44,8 @@ impl DeviceStateReader {
         &self,
         timeout: Option<Duration>,
         process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
-        supports_both_states: bool,
     ) -> Result<Vec<DeviceStateUpdate>, MirajazzError> {
-        let input = self
-            .device
-            .read_input(timeout, process_input, supports_both_states)?;
+        let input = self.device.read_input(timeout, process_input)?;
 
         let mut my_states = self.states.lock()?;
 
@@ -59,7 +56,7 @@ impl DeviceStateReader {
                 for (index, (their, mine)) in
                     zip(buttons.iter(), my_states.buttons.iter()).enumerate()
                 {
-                    if !supports_both_states {
+                    if !self.device.supports_both_states() {
                         if *their {
                             updates.push(DeviceStateUpdate::ButtonDown(index as u8));
                             updates.push(DeviceStateUpdate::ButtonUp(index as u8));
@@ -80,7 +77,7 @@ impl DeviceStateReader {
                 for (index, (their, mine)) in
                     zip(encoders.iter(), my_states.encoders.iter()).enumerate()
                 {
-                    if !supports_both_states {
+                    if !self.device.supports_both_states() {
                         if *their {
                             updates.push(DeviceStateUpdate::EncoderDown(index as u8));
                             updates.push(DeviceStateUpdate::EncoderUp(index as u8));
