@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2025-04-27
+
+### 🚜 Refactor
+
+- [**breaking**] Moved supports_both_states to a struct value
+
 ## [0.2.1] - 2025-04-26
 
 ### 🐛 Bug Fixes
