@@ -1,8 +1,6 @@
-use std::{
-    iter::zip,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{iter::zip, sync::Arc, time::Duration};
+
+use tokio::sync::Mutex;
 
 use crate::{device::Device, error::MirajazzError, types::DeviceInput};
 
@@ -40,14 +38,14 @@ pub struct DeviceStateReader {
 
 impl DeviceStateReader {
     /// Reads states and returns updates
-    pub fn read(
+    pub async fn read(
         &self,
         timeout: Option<Duration>,
         process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
     ) -> Result<Vec<DeviceStateUpdate>, MirajazzError> {
-        let input = self.device.read_input(timeout, process_input)?;
+        let input = self.device.read_input(timeout, process_input).await?;
 
-        let mut my_states = self.states.lock()?;
+        let mut my_states = self.states.lock().await;
 
         let mut updates = vec![];
 
