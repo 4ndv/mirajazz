@@ -6,8 +6,7 @@ use image::{ColorType, DynamicImage, GenericImageView, ImageError};
 use crate::error::MirajazzError;
 use crate::types::{ImageFormat, ImageMirroring, ImageMode, ImageRotation};
 
-/// Converts image into image data depending on provided image format
-pub fn convert_image_with_format(
+fn convert_image_with_format_impl(
     image_format: ImageFormat,
     image: DynamicImage,
 ) -> Result<Vec<u8>, ImageError> {
@@ -50,6 +49,14 @@ pub fn convert_image_with_format(
             Ok(buf)
         }
     }
+}
+
+/// Converts image into image data depending on provided image format
+pub async fn convert_image_with_format(
+    image_format: ImageFormat,
+    image: DynamicImage,
+) -> Result<Vec<u8>, ImageError> {
+    tokio::task::block_in_place(move || convert_image_with_format_impl(image_format, image))
 }
 
 /// Rect to be used when trying to send image to lcd screen
