@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::HashSet,
     str::{from_utf8, Utf8Error},
     sync::{
@@ -85,7 +84,7 @@ pub struct Device {
     /// Connected HIDDevice
     hid_device: HidDevice,
     /// Device reader/writer
-    reader_writer: RefCell<DeviceReaderWriter>,
+    reader_writer: Arc<Mutex<DeviceReaderWriter>>,
     /// Temporarily cache the image before sending it to the device
     image_cache: Mutex<Vec<ImageCache>>,
     /// Device needs to be initialized
@@ -124,7 +123,7 @@ impl Device {
                 key_count,
                 encoder_count,
                 hid_device,
-                reader_writer: RefCell::new(reader_writer),
+                reader_writer: Arc::new(Mutex::new(reader_writer)),
                 packet_size: if is_v2 { 1024 } else { 512 },
                 image_cache: Mutex::new(vec![]),
                 initialized: false.into(),
@@ -442,7 +441,8 @@ impl Device {
 
         let _size = self
             .reader_writer
-            .borrow_mut()
+            .lock()
+            .await
             .read_input_report(&mut buf)
             .await?;
 
@@ -458,7 +458,8 @@ impl Device {
 
         let size = self
             .reader_writer
-            .borrow_mut()
+            .lock()
+            .await
             .read_input_report(&mut buf)
             .or(async {
                 Timer::after(timeout).await;
@@ -477,7 +478,8 @@ impl Device {
     pub async fn write_data(&self, payload: &[u8]) -> Result<(), MirajazzError> {
         Ok(self
             .reader_writer
-            .borrow_mut()
+            .lock()
+            .await
             .write_output_report(&payload)
             .await?)
     }
