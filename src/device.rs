@@ -180,7 +180,7 @@ impl Device {
     pub async fn read_input(
         &self,
         timeout: Option<Duration>,
-        process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
+        process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
     ) -> Result<DeviceInput, MirajazzError> {
         self.initialize().await?;
 
@@ -393,7 +393,10 @@ impl Device {
     }
 
     /// Returns button state reader for this device
-    pub fn get_reader(self: &Arc<Self>) -> Arc<DeviceStateReader> {
+    pub fn get_reader(
+        self: &Arc<Self>,
+        process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
+    ) -> Arc<DeviceStateReader> {
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(DeviceStateReader {
             device: self.clone(),
@@ -401,6 +404,7 @@ impl Device {
                 buttons: vec![false; self.key_count],
                 encoders: vec![false; self.encoder_count],
             }),
+            process_input,
         })
     }
 

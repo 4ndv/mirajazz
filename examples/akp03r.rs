@@ -54,18 +54,14 @@ async fn main() -> Result<(), MirajazzError> {
 
         let device = Arc::new(device);
         {
-            let reader = device.get_reader();
+            let reader = device.get_reader(|key, state| {
+                println!("Key {}, state {}", key, state);
+
+                Ok(DeviceInput::NoData)
+            });
 
             loop {
-                println!("Iter");
-                match reader
-                    .read(None, |key, state| {
-                        println!("Key {}, state {}", key, state);
-
-                        Ok(DeviceInput::NoData)
-                    })
-                    .await
-                {
+                match reader.read(None).await {
                     Ok(updates) => updates,
                     Err(_) => break,
                 };

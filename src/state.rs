@@ -34,6 +34,7 @@ pub struct DeviceState {
 pub struct DeviceStateReader {
     pub device: Arc<Device>,
     pub states: Mutex<DeviceState>,
+    pub process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
 }
 
 impl DeviceStateReader {
@@ -41,12 +42,14 @@ impl DeviceStateReader {
     pub async fn read(
         &self,
         timeout: Option<Duration>,
-        process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
     ) -> Result<Vec<DeviceStateUpdate>, MirajazzError> {
-        let input = self.device.read_input(timeout, process_input).await?;
+        let input = self.device.read_input(timeout, self.process_input).await?;
 
+        Ok(self.input_to_updates(input).await)
+    }
+
+    async fn input_to_updates(&self, input: DeviceInput) -> Vec<DeviceStateUpdate> {
         let mut my_states = self.states.lock().await;
-
         let mut updates = vec![];
 
         match input {
@@ -104,6 +107,6 @@ impl DeviceStateReader {
 
         drop(my_states);
 
-        Ok(updates)
+        updates
     }
 }
