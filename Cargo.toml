@@ -13,7 +13,7 @@ license = "MPL-2.0"
 pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]
 
 [dependencies]
-async-hid = "0.4.0"
+async-hid = "0.4.2"
 image = { version = "0.25.6", default-features = false, features = ["bmp", "jpeg"] }
 futures-lite = "2.6.0"
 async-io = "2.4.1"
