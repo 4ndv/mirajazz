@@ -1,14 +1,23 @@
 # Mirajazz
 
+![Crates.io Version](https://img.shields.io/crates/v/mirajazz)
+![Crates.io License](https://img.shields.io/crates/l/mirajazz)
+
 A Rust crate for interfacing with Mirabox and Ajazz "stream controller" devices
 
 This is a hardfork of [elgato-streamdeck](https://github.com/streamduck-org/elgato-streamdeck) crate, with notable differences:
 
 - No Elgato-related code. For that you should use an original library
 - No device-specific code in the library, which devices to support is up to you
-- No async interface (for now), due to hidapi-rs lack of proper async support
+- Uses [async-hid](https://github.com/sidit77/async-hid) instead of [hidapi-rs](https://github.com/ruabmbua/hidapi-rs)
+- Async only
 
 The idea is to have a common lowlevel library serving as a backbone for device-specific [OpenDeck](https://github.com/nekename/OpenDeck) plugins
+
+## Current limitations
+
+- Depends on tokio for wrapping synchronous image manipulation tasks
+- No way to read firmware version due to async-hid not supporting feature reports for now
 
 ## udev rules
 
