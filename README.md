@@ -9,7 +9,7 @@ This is a hardfork of [elgato-streamdeck](https://github.com/streamduck-org/elga
 
 - No Elgato-related code. For that you should use an original library
 - No device-specific code in the library, which devices to support is up to you
-- Uses [async-hid](https://github.com/sidit77/async-hid) instead of [hidapi-rs](https://github.com/ruabmbua/hidapi-rs)
+- Uses [async-hid](https://github.com/sidit77/async-hid) instead of [hidapi-rs](https://github.com/ruabmbua/hidapi-rs). For old synchronous implementation use version `v0.3.0`
 - Async only
 
 The idea is to have a common lowlevel library serving as a backbone for device-specific [OpenDeck](https://github.com/nekename/OpenDeck) plugins
