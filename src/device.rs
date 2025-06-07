@@ -8,7 +8,9 @@ use std::{
     time::Duration,
 };
 
-use async_hid::{AsyncHidRead, AsyncHidWrite, Device as HidDevice, DeviceReaderWriter, HidBackend};
+use async_hid::{
+    AsyncHidRead, AsyncHidWrite, Device as HidDevice, DeviceReader, DeviceWriter, HidBackend,
+};
 use async_io::Timer;
 use futures_lite::{FutureExt, StreamExt};
 use image::DynamicImage;
@@ -83,8 +85,10 @@ pub struct Device {
     packet_size: usize,
     /// Connected HIDDevice
     hid_device: HidDevice,
-    /// Device reader/writer
-    reader_writer: Arc<Mutex<DeviceReaderWriter>>,
+    /// Device reader
+    reader: Arc<Mutex<DeviceReader>>,
+    /// Device writer
+    writer: Arc<Mutex<DeviceWriter>>,
     /// Temporarily cache the image before sending it to the device
     image_cache: Mutex<Vec<ImageCache>>,
     /// Device needs to be initialized
@@ -112,7 +116,7 @@ impl Device {
             .await;
 
         if let Some(hid_device) = hid_device {
-            let reader_writer = hid_device.open().await?;
+            let (reader, writer) = hid_device.open().await?;
 
             Ok(Device {
                 vid,
@@ -123,7 +127,8 @@ impl Device {
                 key_count,
                 encoder_count,
                 hid_device,
-                reader_writer: Arc::new(Mutex::new(reader_writer)),
+                reader: Arc::new(Mutex::new(reader)),
+                writer: Arc::new(Mutex::new(writer)),
                 packet_size: if is_v2 { 1024 } else { 512 },
                 image_cache: Mutex::new(vec![]),
                 initialized: false.into(),
@@ -439,12 +444,7 @@ impl Device {
     pub async fn read_data(&self, length: usize) -> Result<Vec<u8>, MirajazzError> {
         let mut buf = vec![0u8; length];
 
-        let _size = self
-            .reader_writer
-            .lock()
-            .await
-            .read_input_report(&mut buf)
-            .await?;
+        let _size = self.reader.lock().await.read_input_report(&mut buf).await?;
 
         Ok(buf)
     }
@@ -457,7 +457,7 @@ impl Device {
         let mut buf = vec![0u8; length];
 
         let size = self
-            .reader_writer
+            .reader
             .lock()
             .await
             .read_input_report(&mut buf)
@@ -477,7 +477,7 @@ impl Device {
     /// Writes data to device
     pub async fn write_data(&self, payload: &[u8]) -> Result<(), MirajazzError> {
         Ok(self
-            .reader_writer
+            .writer
             .lock()
             .await
             .write_output_report(&payload)
