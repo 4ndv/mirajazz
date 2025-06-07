@@ -1,8 +1,6 @@
-use std::{
-    iter::zip,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{iter::zip, sync::Arc, time::Duration};
+
+use tokio::sync::Mutex;
 
 use crate::{device::Device, error::MirajazzError, types::DeviceInput};
 
@@ -36,19 +34,22 @@ pub struct DeviceState {
 pub struct DeviceStateReader {
     pub device: Arc<Device>,
     pub states: Mutex<DeviceState>,
+    pub process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
 }
 
 impl DeviceStateReader {
     /// Reads states and returns updates
-    pub fn read(
+    pub async fn read(
         &self,
         timeout: Option<Duration>,
-        process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
     ) -> Result<Vec<DeviceStateUpdate>, MirajazzError> {
-        let input = self.device.read_input(timeout, process_input)?;
+        let input = self.device.read_input(timeout, self.process_input).await?;
 
-        let mut my_states = self.states.lock()?;
+        Ok(self.input_to_updates(input).await)
+    }
 
+    async fn input_to_updates(&self, input: DeviceInput) -> Vec<DeviceStateUpdate> {
+        let mut my_states = self.states.lock().await;
         let mut updates = vec![];
 
         match input {
@@ -106,6 +107,6 @@ impl DeviceStateReader {
 
         drop(my_states);
 
-        Ok(updates)
+        updates
     }
 }

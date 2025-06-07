@@ -5,12 +5,15 @@ use std::{
     sync::PoisonError,
 };
 
-use hidapi::HidError;
+use async_hid::HidError;
 use image::ImageError;
 
 /// Errors that can occur while working with devices
 #[derive(Debug)]
 pub enum MirajazzError {
+    /// No device found for specified vid, pid and serial
+    DeviceNotFoundError,
+
     /// HidApi error
     HidError(HidError),
 

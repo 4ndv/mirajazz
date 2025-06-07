@@ -1,8 +1,9 @@
-use std::{process::exit, sync::Arc, thread::sleep, time::Duration};
+use std::{sync::Arc, thread::sleep, time::Duration};
 
 use image::open;
 use mirajazz::{
-    device::{list_devices, new_hidapi, Device},
+    device::{list_devices, Device},
+    error::MirajazzError,
     types::{DeviceInput, ImageFormat, ImageMirroring, ImageMode, ImageRotation},
 };
 
@@ -38,18 +39,11 @@ fn device_to_opendeck(key: u8) -> u8 {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), MirajazzError> {
     println!("Mirajazz example for Ajazz AKP153R");
 
-    let hidapi = match new_hidapi() {
-        Ok(hidapi) => hidapi,
-        Err(e) => {
-            eprintln!("Failed to create HidApi instance: {}", e);
-            exit(1);
-        }
-    };
-
-    for (vid, pid, serial) in list_devices(&hidapi, &[VID]) {
+    for (vid, pid, serial) in list_devices(&[VID]).await? {
         if pid != PID {
             continue;
         }
@@ -57,26 +51,13 @@ fn main() {
         println!("Connecting to {:04X}:{:04X}, {}", vid, pid, serial);
 
         // Connect to the device
-        let device = Device::connect(
-            &hidapi,
-            vid,
-            pid,
-            &serial,
-            false,
-            false,
-            KEY_COUNT as usize,
-            0,
-        )
-        .expect("Failed to connect");
-        // Print out some info from the device
-        println!(
-            "Connected to '{}' with version '{}'",
-            device.serial_number().unwrap(),
-            device.firmware_version().unwrap()
-        );
+        let device = Device::connect(vid, pid, serial, false, false, KEY_COUNT as usize, 0).await?;
 
-        device.set_brightness(50).unwrap();
-        device.clear_all_button_images().unwrap();
+        // Print out some info from the device
+        println!("Connected to '{}'", device.serial_number().unwrap());
+
+        device.set_brightness(50).await?;
+        device.clear_all_button_images().await?;
         // Use image-rs to load an image
         let image = open("examples/test.jpg").unwrap();
 
@@ -85,24 +66,24 @@ fn main() {
         for i in 0..device.key_count() as u8 {
             device
                 .set_button_image(opendeck_to_device(i), IMAGE_FORMAT, image.clone())
-                .unwrap();
+                .await?;
 
             sleep(Duration::from_millis(50));
 
             // Flush
-            device.flush().unwrap();
+            device.flush().await?;
         }
 
         let device = Arc::new(device);
         {
-            let reader = device.get_reader();
+            let reader = device.get_reader(|key, _state| {
+                println!("Key {}, converted {}", key, device_to_opendeck(key));
+
+                Ok(DeviceInput::NoData)
+            });
 
             loop {
-                match reader.read(Some(Duration::from_secs_f64(100.0)), |key, _state| {
-                    println!("Key {}, converted {}", key, device_to_opendeck(key));
-
-                    Ok(DeviceInput::NoData)
-                }) {
+                match reader.read(None).await {
                     Ok(updates) => updates,
                     Err(_) => break,
                 };
@@ -111,6 +92,8 @@ fn main() {
             drop(reader);
         }
 
-        device.shutdown().ok();
+        device.shutdown().await?;
     }
+
+    Ok(())
 }

@@ -3,13 +3,18 @@ use std::{
     str::{from_utf8, Utf8Error},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, RwLock,
+        Arc,
     },
     time::Duration,
 };
 
-use hidapi::{HidApi, HidDevice, HidResult};
+use async_hid::{
+    AsyncHidRead, AsyncHidWrite, Device as HidDevice, DeviceReader, DeviceWriter, HidBackend,
+};
+use async_io::Timer;
+use futures_lite::{FutureExt, StreamExt};
 use image::DynamicImage;
+use tokio::sync::Mutex;
 
 use crate::{
     error::MirajazzError,
@@ -18,38 +23,34 @@ use crate::{
     types::{DeviceInput, ImageFormat},
 };
 
-/// Creates an instance of the HidApi
+/// Creates an instance of the async-hid backend
 ///
-/// Can be used if you don't want to link hidapi crate into your project
-pub fn new_hidapi() -> HidResult<HidApi> {
-    HidApi::new()
+/// Can be used if you don't want to link async-hid crate into your project
+pub fn new_hid_backend() -> HidBackend {
+    HidBackend::default()
 }
 
-/// Actually refreshes the device list
-pub fn refresh_device_list(hidapi: &mut HidApi) -> HidResult<()> {
-    hidapi.refresh_devices()
-}
-
-/// Returns a list of devices as (Kind, Serial Number) that could be found using HidApi.
-///
-/// **WARNING:** To refresh the list, use [refresh_device_list]
-pub fn list_devices(hidapi: &HidApi, vids: &[u16]) -> Vec<(u16, u16, String)> {
-    hidapi
-        .device_list()
+/// Returns a list of devices as (Kind, Serial Number) that could be found using hid backend.
+pub async fn list_devices(vids: &[u16]) -> Result<HashSet<(u16, u16, String)>, MirajazzError> {
+    let devices = HidBackend::default()
+        .enumerate()
+        .await?
+        .map(HidDevice::to_device_info)
         .filter_map(|d| {
-            if !vids.contains(&d.vendor_id()) {
+            if !vids.contains(&d.vendor_id) {
                 return None;
             }
 
-            if let Some(serial) = d.serial_number() {
-                Some((d.vendor_id(), d.product_id(), serial.to_string()))
+            if let Some(serial) = d.serial_number {
+                Some((d.vendor_id, d.product_id, serial.to_string()))
             } else {
                 None
             }
         })
         .collect::<HashSet<_>>()
-        .into_iter()
-        .collect()
+        .await;
+
+    Ok(devices)
 }
 
 /// Extracts string from byte array, removing \0 symbols
@@ -68,6 +69,8 @@ pub struct Device {
     pub vid: u16,
     /// Product ID of the device
     pub pid: u16,
+    /// Serial number
+    pub serial_number: String,
     /// Use v2 hacks
     is_v2: bool,
     /// Emits two events for buttons or not
@@ -80,8 +83,12 @@ pub struct Device {
     packet_size: usize,
     /// Connected HIDDevice
     hid_device: HidDevice,
+    /// Device reader
+    reader: Arc<Mutex<DeviceReader>>,
+    /// Device writer
+    writer: Arc<Mutex<DeviceWriter>>,
     /// Temporarily cache the image before sending it to the device
-    image_cache: RwLock<Vec<ImageCache>>,
+    image_cache: Mutex<Vec<ImageCache>>,
     /// Device needs to be initialized
     initialized: AtomicBool,
 }
@@ -89,30 +96,44 @@ pub struct Device {
 /// Static functions of the struct
 impl Device {
     /// Attempts to connect to the device
-    pub fn connect(
-        hidapi: &HidApi,
+    pub async fn connect(
         vid: u16,
         pid: u16,
-        serial: &str,
+        serial: String,
         is_v2: bool,
         supports_both_states: bool,
         key_count: usize,
         encoder_count: usize,
     ) -> Result<Device, MirajazzError> {
-        let hid_device = hidapi.open_serial(vid, pid, serial)?;
+        let hid_device = HidBackend::default()
+            .enumerate()
+            .await?
+            .find(|d| {
+                d.vendor_id == vid && d.product_id == pid && d.serial_number == Some(serial.clone())
+            })
+            .await;
 
-        Ok(Device {
-            vid,
-            pid,
-            is_v2,
-            supports_both_states,
-            key_count,
-            encoder_count,
-            packet_size: if is_v2 { 1024 } else { 512 },
-            hid_device,
-            image_cache: RwLock::new(vec![]),
-            initialized: false.into(),
-        })
+        if let Some(hid_device) = hid_device {
+            let (reader, writer) = hid_device.open().await?;
+
+            Ok(Device {
+                vid,
+                pid,
+                serial_number: serial.to_string(),
+                is_v2,
+                supports_both_states,
+                key_count,
+                encoder_count,
+                hid_device,
+                reader: Arc::new(Mutex::new(reader)),
+                writer: Arc::new(Mutex::new(writer)),
+                packet_size: if is_v2 { 1024 } else { 512 },
+                image_cache: Mutex::new(vec![]),
+                initialized: false.into(),
+            })
+        } else {
+            Err(MirajazzError::DeviceNotFoundError)
+        }
     }
 }
 
@@ -128,47 +149,13 @@ impl Device {
         self.encoder_count
     }
 
-    /// Returns manufacturer string of the device
-    pub fn manufacturer(&self) -> Result<String, MirajazzError> {
-        Ok(self
-            .hid_device
-            .get_manufacturer_string()?
-            .unwrap_or_else(|| "Unknown".to_string()))
-    }
-
-    /// Returns product string of the device
-    pub fn product(&self) -> Result<String, MirajazzError> {
-        Ok(self
-            .hid_device
-            .get_product_string()?
-            .unwrap_or_else(|| "Unknown".to_string()))
-    }
-
     /// Returns serial number of the device
-    pub fn serial_number(&self) -> Result<String, MirajazzError> {
-        let serial = self.hid_device.get_serial_number_string()?;
-        match serial {
-            Some(serial) => {
-                if serial.is_empty() {
-                    Ok("Unknown".to_string())
-                } else {
-                    Ok(serial)
-                }
-            }
-            None => Ok("Unknown".to_string()),
-        }
-        .map(|s| s.replace('\u{0001}', ""))
-    }
-
-    /// Returns firmware version of the device
-    pub fn firmware_version(&self) -> Result<String, MirajazzError> {
-        let bytes = self.get_feature_report(0x01, 20)?;
-
-        Ok(extract_str(&bytes[0..])?)
+    pub fn serial_number(&self) -> Option<String> {
+        self.hid_device.serial_number.clone()
     }
 
     /// Initializes the device
-    fn initialize(&self) -> Result<(), MirajazzError> {
+    async fn initialize(&self) -> Result<(), MirajazzError> {
         if self.initialized.load(Ordering::Acquire) {
             return Ok(());
         }
@@ -176,30 +163,40 @@ impl Device {
         self.initialized.store(true, Ordering::Release);
 
         let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x44, 0x49, 0x53];
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         let mut buf = vec![
             0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x4c, 0x49, 0x47, 0x00, 0x00, 0x00, 0x00,
         ];
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         Ok(())
     }
 
-    /// Returns value of `supports_both_states`
+    /// Returns value of `supports_both_states` field
     pub fn supports_both_states(&self) -> bool {
         self.supports_both_states
     }
 
     /// Reads current input state from the device and calls provided function for processing
-    pub fn read_input(
+    pub async fn read_input(
         &self,
         timeout: Option<Duration>,
-        process_input: impl Fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
+        process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
     ) -> Result<DeviceInput, MirajazzError> {
-        self.initialize()?;
+        self.initialize().await?;
 
-        let data = self.read_data(512, timeout)?;
+        let data = if timeout.is_some() {
+            self.read_data_with_timeout(512, timeout.unwrap()).await?
+        } else {
+            Some(self.read_data(512).await?)
+        };
+
+        if data.is_none() {
+            return Ok(DeviceInput::NoData);
+        }
+
+        let data = data.unwrap();
 
         if data[0] == 0 {
             return Ok(DeviceInput::NoData);
@@ -215,18 +212,18 @@ impl Device {
     }
 
     /// Resets the device
-    pub fn reset(&self) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    pub async fn reset(&self) -> Result<(), MirajazzError> {
+        self.initialize().await?;
 
-        self.set_brightness(100)?;
-        self.clear_all_button_images()?;
+        self.set_brightness(100).await?;
+        self.clear_all_button_images().await?;
 
         Ok(())
     }
 
     /// Sets brightness of the device, value range is 0 - 100
-    pub fn set_brightness(&self, percent: u8) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    pub async fn set_brightness(&self, percent: u8) -> Result<(), MirajazzError> {
+        self.initialize().await?;
 
         let percent = percent.clamp(0, 100);
 
@@ -234,12 +231,13 @@ impl Device {
             0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x4c, 0x49, 0x47, 0x00, 0x00, percent,
         ];
 
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         Ok(())
     }
 
-    fn send_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
+    /// Writes raw image data to the device, not to be used directly
+    async fn send_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
         let mut buf = vec![
             0x00,
             0x43,
@@ -257,30 +255,30 @@ impl Device {
             key + 1,
         ];
 
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
-        self.write_image_data_reports(image_data)?;
+        self.write_image_data_reports(image_data).await?;
 
         Ok(())
     }
 
-    /// Writes image data to device, changes must be flushed with `.flush()` before
+    /// Writes image data to device, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
-    pub fn write_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
+    pub async fn write_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
         let cache_entry = ImageCache {
             key,
             image_data: image_data.to_vec(), // Convert &[u8] to Vec<u8>
         };
 
-        self.image_cache.write()?.push(cache_entry);
+        self.image_cache.lock().await.push(cache_entry);
 
         Ok(())
     }
 
-    /// Sets button's image to blank, changes must be flushed with `.flush()` before
+    /// Sets button's image to blank, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
-    pub fn clear_button_image(&self, key: u8) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    pub async fn clear_button_image(&self, key: u8) -> Result<(), MirajazzError> {
+        self.initialize().await?;
 
         let mut buf = vec![
             0x00,
@@ -298,105 +296,112 @@ impl Device {
             if key == 0xff { 0xff } else { key + 1 },
         ];
 
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         Ok(())
     }
 
-    /// Sets blank images to every button, changes must be flushed with `.flush()` before
+    /// Sets blank images to every button, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
-    pub fn clear_all_button_images(&self) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    pub async fn clear_all_button_images(&self) -> Result<(), MirajazzError> {
+        self.initialize().await?;
 
-        self.clear_button_image(0xFF)?;
+        self.clear_button_image(0xFF).await?;
 
         if self.is_v2 {
             // Mirabox "v2" requires STP to commit clearing the screen
             let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x53, 0x54, 0x50];
 
-            self.write_extended_data(&mut buf)?;
+            self.write_extended_data(&mut buf).await?;
         }
 
         Ok(())
     }
 
-    /// Sets specified button's image, changes must be flushed with `.flush()` before
+    /// Sets specified button's image, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
-    pub fn set_button_image(
+    pub async fn set_button_image(
         &self,
         key: u8,
         image_format: ImageFormat,
         image: DynamicImage,
     ) -> Result<(), MirajazzError> {
-        self.initialize()?;
+        self.initialize().await?;
 
-        let image_data = convert_image_with_format(image_format, image)?;
+        let image_data = convert_image_with_format(image_format, image).await?;
 
-        self.write_image(key, &image_data)?;
+        self.write_image(key, &image_data).await?;
 
         Ok(())
     }
 
-    /// Sleeps the device
-    pub fn sleep(&self) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    /// Puts device to sleep
+    pub async fn sleep(&self) -> Result<(), MirajazzError> {
+        self.initialize().await?;
 
         let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x48, 0x41, 0x4e];
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         Ok(())
     }
 
     /// Make periodic events to the device, to keep it alive
-    pub fn keep_alive(&self) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    pub async fn keep_alive(&self) -> Result<(), MirajazzError> {
+        self.initialize().await?;
 
         let mut buf = vec![
             0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x43, 0x4F, 0x4E, 0x4E, 0x45, 0x43, 0x54,
         ];
 
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         Ok(())
     }
 
     /// Shutdown the device
-    pub fn shutdown(&self) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    pub async fn shutdown(&self) -> Result<(), MirajazzError> {
+        self.initialize().await?;
 
         let mut buf = vec![
             0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x43, 0x4c, 0x45, 0x00, 0x00, 0x44, 0x43,
         ];
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x48, 0x41, 0x4E];
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
         Ok(())
     }
 
-    /// Flushes the button's image to the device
-    pub fn flush(&self) -> Result<(), MirajazzError> {
-        self.initialize()?;
+    /// Flushes written images, updating displays
+    pub async fn flush(&self) -> Result<(), MirajazzError> {
+        let mut cache = self.image_cache.lock().await;
 
-        if self.image_cache.write()?.is_empty() {
+        self.initialize().await?;
+
+        if cache.is_empty() {
             return Ok(());
         }
 
-        for image in self.image_cache.read()?.iter() {
-            self.send_image(image.key, &image.image_data)?;
+        for image in cache.iter() {
+            self.send_image(image.key, &image.image_data).await?;
         }
 
         let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x53, 0x54, 0x50];
-        self.write_extended_data(&mut buf)?;
+        self.write_extended_data(&mut buf).await?;
 
-        self.image_cache.write()?.clear();
+        cache.clear();
 
         Ok(())
     }
 
     /// Returns button state reader for this device
-    pub fn get_reader(self: &Arc<Self>) -> Arc<DeviceStateReader> {
+    ///
+    /// Accepts function pointer for a function that maps raw device inputs to [DeviceInput]
+    pub fn get_reader(
+        self: &Arc<Self>,
+        process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
+    ) -> Arc<DeviceStateReader> {
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(DeviceStateReader {
             device: self.clone(),
@@ -404,10 +409,12 @@ impl Device {
                 buttons: vec![false; self.key_count],
                 encoders: vec![false; self.encoder_count],
             }),
+            process_input,
         })
     }
 
-    fn write_image_data_reports(&self, image_data: &[u8]) -> Result<(), MirajazzError> {
+    /// Splits image data into chunks and writes them separately, not to be used directly
+    async fn write_image_data_reports(&self, image_data: &[u8]) -> Result<(), MirajazzError> {
         let image_report_length = self.packet_size + 1;
         let image_report_header_length = 1;
         let image_report_payload_length = image_report_length - image_report_header_length;
@@ -426,7 +433,7 @@ impl Device {
             // Adding padding
             buf.extend(vec![0u8; image_report_length - buf.len()]);
 
-            self.write_data(&buf)?;
+            self.write_data(&buf).await?;
 
             bytes_remaining -= this_length;
             page_number += 1;
@@ -435,59 +442,57 @@ impl Device {
         Ok(())
     }
 
-    /// Performs get_feature_report on [HidDevice]
-    pub fn get_feature_report(
-        &self,
-        report_id: u8,
-        length: usize,
-    ) -> Result<Vec<u8>, MirajazzError> {
-        let mut buff = vec![0u8; length];
-
-        // Inserting report id byte
-        buff.insert(0, report_id);
-
-        // Getting feature report
-        self.hid_device.get_feature_report(buff.as_mut_slice())?;
-
-        Ok(buff)
-    }
-
-    /// Performs send_feature_report on [HidDevice]
-    pub fn send_feature_report(&self, payload: &[u8]) -> Result<(), MirajazzError> {
-        self.hid_device.send_feature_report(payload)?;
-
-        Ok(())
-    }
-
-    /// Reads data from [HidDevice]. Blocking mode is used if timeout is specified
-    pub fn read_data(
-        &self,
-        length: usize,
-        timeout: Option<Duration>,
-    ) -> Result<Vec<u8>, MirajazzError> {
-        self.hid_device.set_blocking_mode(timeout.is_some())?;
-
+    /// Reads data from device
+    pub async fn read_data(&self, length: usize) -> Result<Vec<u8>, MirajazzError> {
         let mut buf = vec![0u8; length];
 
-        match timeout {
-            Some(timeout) => self
-                .hid_device
-                .read_timeout(buf.as_mut_slice(), timeout.as_millis() as i32),
-            None => self.hid_device.read(buf.as_mut_slice()),
-        }?;
+        let _size = self.reader.lock().await.read_input_report(&mut buf).await?;
 
         Ok(buf)
     }
 
-    /// Writes data to [HidDevice]
-    pub fn write_data(&self, payload: &[u8]) -> Result<usize, MirajazzError> {
-        Ok(self.hid_device.write(payload)?)
+    /// Reads data from device with specified timeout
+    ///
+    /// Returns [Some] if there was any data, returns [None] if timeout was reached before reading something
+    pub async fn read_data_with_timeout(
+        &self,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Option<Vec<u8>>, MirajazzError> {
+        let mut buf = vec![0u8; length];
+
+        let size = self
+            .reader
+            .lock()
+            .await
+            .read_input_report(&mut buf)
+            .or(async {
+                Timer::after(timeout).await;
+                Ok(0)
+            })
+            .await?;
+
+        if size == 0 {
+            return Ok(None);
+        }
+
+        Ok(Some(buf))
     }
 
-    /// Writes data to [HidDevice]
-    pub fn write_extended_data(&self, payload: &mut Vec<u8>) -> Result<usize, MirajazzError> {
+    /// Writes data to device
+    pub async fn write_data(&self, payload: &[u8]) -> Result<(), MirajazzError> {
+        Ok(self
+            .writer
+            .lock()
+            .await
+            .write_output_report(&payload)
+            .await?)
+    }
+
+    /// Writes data to device extending payload to the required size
+    pub async fn write_extended_data(&self, payload: &mut Vec<u8>) -> Result<(), MirajazzError> {
         payload.extend(vec![0u8; 1 + self.packet_size - payload.len()]);
 
-        Ok(self.hid_device.write(payload)?)
+        self.write_data(payload).await
     }
 }
