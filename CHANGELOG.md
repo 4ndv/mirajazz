@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2025-06-07
+
+### 🚀 Features
+
+- [**breaking**] Migrate to async-hid
+
+### 🐛 Bug Fixes
+
+- Replace RefCell for reader_writer with Arc+Mutex
+- Separate mutexes for reader and writer
+
+### 💼 Other
+
+- Added akp153r example
+- Update akp03r example to async
+- Update akp153r example to async
+- *(deps)* Bump async-hid to 0.4.2
+
+### 🚜 Refactor
+
+- Move process_input to reader instead of read, split read into two functions
+
+### 📚 Documentation
+
+- Better documentation for Device struct impl
+
+### ⚙️ Miscellaneous Tasks
+
+- Added badges to readme and document 0.4.0 stuff
+- Mention v0.3.0 in the readme as the last sync version
+
 ## [0.3.0] - 2025-04-27
 
 ### 🚜 Refactor
