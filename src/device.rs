@@ -30,9 +30,7 @@ pub fn new_hid_backend() -> HidBackend {
     HidBackend::default()
 }
 
-/// Returns a list of devices as (Kind, Serial Number) that could be found using HidApi.
-///
-/// **WARNING:** To refresh the list, use [refresh_device_list]
+/// Returns a list of devices as (Kind, Serial Number) that could be found using hid backend.
 pub async fn list_devices(vids: &[u16]) -> Result<HashSet<(u16, u16, String)>, MirajazzError> {
     let devices = HidBackend::default()
         .enumerate()
@@ -175,7 +173,7 @@ impl Device {
         Ok(())
     }
 
-    /// Returns value of `supports_both_states`
+    /// Returns value of `supports_both_states` field
     pub fn supports_both_states(&self) -> bool {
         self.supports_both_states
     }
@@ -238,6 +236,7 @@ impl Device {
         Ok(())
     }
 
+    /// Writes raw image data to the device, not to be used directly
     async fn send_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
         let mut buf = vec![
             0x00,
@@ -263,7 +262,7 @@ impl Device {
         Ok(())
     }
 
-    /// Writes image data to device, changes must be flushed with `.flush()` before
+    /// Writes image data to device, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
     pub async fn write_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
         let cache_entry = ImageCache {
@@ -276,7 +275,7 @@ impl Device {
         Ok(())
     }
 
-    /// Sets button's image to blank, changes must be flushed with `.flush()` before
+    /// Sets button's image to blank, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
     pub async fn clear_button_image(&self, key: u8) -> Result<(), MirajazzError> {
         self.initialize().await?;
@@ -302,7 +301,7 @@ impl Device {
         Ok(())
     }
 
-    /// Sets blank images to every button, changes must be flushed with `.flush()` before
+    /// Sets blank images to every button, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
     pub async fn clear_all_button_images(&self) -> Result<(), MirajazzError> {
         self.initialize().await?;
@@ -319,7 +318,7 @@ impl Device {
         Ok(())
     }
 
-    /// Sets specified button's image, changes must be flushed with `.flush()` before
+    /// Sets specified button's image, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
     pub async fn set_button_image(
         &self,
@@ -336,7 +335,7 @@ impl Device {
         Ok(())
     }
 
-    /// Sleeps the device
+    /// Puts device to sleep
     pub async fn sleep(&self) -> Result<(), MirajazzError> {
         self.initialize().await?;
 
@@ -374,7 +373,7 @@ impl Device {
         Ok(())
     }
 
-    /// Flushes the button's image to the device
+    /// Flushes written images, updating displays
     pub async fn flush(&self) -> Result<(), MirajazzError> {
         let mut cache = self.image_cache.lock().await;
 
@@ -397,6 +396,8 @@ impl Device {
     }
 
     /// Returns button state reader for this device
+    ///
+    /// Accepts function pointer for a function that maps raw device inputs to [DeviceInput]
     pub fn get_reader(
         self: &Arc<Self>,
         process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
@@ -412,6 +413,7 @@ impl Device {
         })
     }
 
+    /// Splits image data into chunks and writes them separately, not to be used directly
     async fn write_image_data_reports(&self, image_data: &[u8]) -> Result<(), MirajazzError> {
         let image_report_length = self.packet_size + 1;
         let image_report_header_length = 1;
@@ -449,6 +451,9 @@ impl Device {
         Ok(buf)
     }
 
+    /// Reads data from device with specified timeout
+    ///
+    /// Returns [Some] if there was any data, returns [None] if timeout was reached before reading something
     pub async fn read_data_with_timeout(
         &self,
         length: usize,
