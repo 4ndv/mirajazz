@@ -1,5 +1,13 @@
+use async_hid::{
+    AsyncHidRead, AsyncHidWrite, Device as HidDevice, DeviceId, DeviceInfo as HidDeviceInfo,
+    DeviceReader, DeviceWriter, HidBackend,
+};
+use async_io::Timer;
+use futures_lite::{FutureExt, Stream, StreamExt};
+use image::DynamicImage;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
+    convert::identity,
     str::{from_utf8, Utf8Error},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -7,20 +15,13 @@ use std::{
     },
     time::Duration,
 };
-
-use async_hid::{
-    AsyncHidRead, AsyncHidWrite, Device as HidDevice, DeviceReader, DeviceWriter, HidBackend,
-};
-use async_io::Timer;
-use futures_lite::{FutureExt, StreamExt};
-use image::DynamicImage;
 use tokio::sync::Mutex;
 
 use crate::{
     error::MirajazzError,
     images::convert_image_with_format,
     state::{DeviceState, DeviceStateReader},
-    types::{DeviceInput, ImageFormat},
+    types::{DeviceInfo, DeviceInput, DeviceLifecycleEvent, ImageFormat},
 };
 
 /// Creates an instance of the async-hid backend
@@ -30,27 +31,131 @@ pub fn new_hid_backend() -> HidBackend {
     HidBackend::default()
 }
 
+fn hid_device_info_to_lib_device_info(
+    vids: &[u16],
+    device_info: HidDeviceInfo,
+) -> Option<DeviceInfo> {
+    if !vids.contains(&device_info.vendor_id) {
+        return None;
+    }
+
+    if let Some(serial) = device_info.serial_number {
+        Some(DeviceInfo::new(
+            device_info.vendor_id,
+            device_info.product_id,
+            serial.to_string(),
+        ))
+    } else {
+        None
+    }
+}
+
 /// Returns a list of devices as (Kind, Serial Number) that could be found using hid backend.
-pub async fn list_devices(vids: &[u16]) -> Result<HashSet<(u16, u16, String)>, MirajazzError> {
+pub async fn list_devices(vids: &[u16]) -> Result<HashSet<DeviceInfo>, MirajazzError> {
     let devices = HidBackend::default()
         .enumerate()
         .await?
         .map(HidDevice::to_device_info)
-        .filter_map(|d| {
-            if !vids.contains(&d.vendor_id) {
-                return None;
-            }
-
-            if let Some(serial) = d.serial_number {
-                Some((d.vendor_id, d.product_id, serial.to_string()))
-            } else {
-                None
-            }
-        })
+        .filter_map(|d| hid_device_info_to_lib_device_info(vids, d))
         .collect::<HashSet<_>>()
         .await;
 
     Ok(devices)
+}
+
+pub struct DeviceWatcher {
+    initialized: bool,
+    id_map: Arc<Mutex<HashMap<DeviceId, DeviceInfo>>>,
+    connected: Arc<Mutex<HashSet<DeviceInfo>>>,
+}
+
+impl DeviceWatcher {
+    /// Builds new device watcher
+    pub fn new() -> Self {
+        Self {
+            initialized: false,
+            id_map: Arc::new(Mutex::new(HashMap::new())),
+            connected: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+
+    /// Returns [Stream] of device connect/disconnect events
+    ///
+    /// **NOTE:** Only watches new events, to get already connected devices, use [list_devices]
+    ///
+    /// **NOTE:** Can only be called once per instance of [DeviceWatcher]
+    pub async fn watch<'a>(
+        &'a mut self,
+        vids: &'a [u16],
+    ) -> Result<impl Stream<Item = DeviceLifecycleEvent> + Send + Unpin + use<'a>, MirajazzError>
+    {
+        let backend = HidBackend::default();
+
+        if self.initialized {
+            return Err(MirajazzError::WatcherAlreadyInitialized);
+        }
+
+        self.initialized = true;
+
+        // We need to fill the devices list beforehand, because
+        let already_connected = HidBackend::default()
+            .enumerate()
+            .await?
+            .map(HidDevice::to_device_info)
+            .filter_map(|d| Some((d.id.clone(), hid_device_info_to_lib_device_info(vids, d)?)))
+            .collect::<HashSet<_>>()
+            .await;
+
+        let mut map = self.id_map.lock().await;
+        let mut connected = self.connected.lock().await;
+
+        for (id, device) in already_connected.into_iter() {
+            map.insert(id, device.clone());
+            connected.insert(device);
+        }
+
+        drop(map);
+        drop(connected);
+
+        let watcher = backend
+            .watch()?
+            .then(|e| async {
+                match e {
+                    async_hid::DeviceEvent::Connected(device_id) => {
+                        let device = HidBackend::default()
+                            .query_devices(&device_id)
+                            .await
+                            .unwrap()
+                            .last()?;
+
+                        let info =
+                            hid_device_info_to_lib_device_info(vids, device.to_device_info())?;
+
+                        self.id_map.lock().await.insert(device_id, info.clone());
+                        let new = self.connected.lock().await.insert(info.clone());
+
+                        if new {
+                            Some(DeviceLifecycleEvent::Connected(info))
+                        } else {
+                            None
+                        }
+                    }
+                    async_hid::DeviceEvent::Disconnected(device_id) => {
+                        let info = self.id_map.lock().await.remove(&device_id)?;
+                        let existed = self.connected.lock().await.remove(&info);
+
+                        if existed {
+                            Some(DeviceLifecycleEvent::Disconnected(info))
+                        } else {
+                            None
+                        }
+                    }
+                }
+            })
+            .filter_map(identity);
+
+        Ok(Box::pin(watcher))
+    }
 }
 
 /// Extracts string from byte array, removing \0 symbols
@@ -81,8 +186,6 @@ pub struct Device {
     encoder_count: usize,
     /// Packet size
     packet_size: usize,
-    /// Connected HIDDevice
-    hid_device: HidDevice,
     /// Device reader
     reader: Arc<Mutex<DeviceReader>>,
     /// Device writer
@@ -97,9 +200,7 @@ pub struct Device {
 impl Device {
     /// Attempts to connect to the device
     pub async fn connect(
-        vid: u16,
-        pid: u16,
-        serial: String,
+        dev: DeviceInfo,
         is_v2: bool,
         supports_both_states: bool,
         key_count: usize,
@@ -109,7 +210,13 @@ impl Device {
             .enumerate()
             .await?
             .find(|d| {
-                d.vendor_id == vid && d.product_id == pid && d.serial_number == Some(serial.clone())
+                if let Some(serial_number) = &d.serial_number {
+                    d.vendor_id == dev.vid
+                        && d.product_id == dev.pid
+                        && serial_number == &dev.serial_number
+                } else {
+                    false
+                }
             })
             .await;
 
@@ -117,14 +224,13 @@ impl Device {
             let (reader, writer) = hid_device.open().await?;
 
             Ok(Device {
-                vid,
-                pid,
-                serial_number: serial.to_string(),
+                vid: dev.vid,
+                pid: dev.pid,
+                serial_number: dev.serial_number,
                 is_v2,
                 supports_both_states,
                 key_count,
                 encoder_count,
-                hid_device,
                 reader: Arc::new(Mutex::new(reader)),
                 writer: Arc::new(Mutex::new(writer)),
                 packet_size: if is_v2 { 1024 } else { 512 },
@@ -150,8 +256,8 @@ impl Device {
     }
 
     /// Returns serial number of the device
-    pub fn serial_number(&self) -> Option<String> {
-        self.hid_device.serial_number.clone()
+    pub fn serial_number(&self) -> &String {
+        &self.serial_number
     }
 
     /// Initializes the device

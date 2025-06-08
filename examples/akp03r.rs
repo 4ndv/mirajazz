@@ -21,19 +21,21 @@ const IMAGE_FORMAT: ImageFormat = ImageFormat {
 async fn main() -> Result<(), MirajazzError> {
     println!("Mirajazz example for Ajazz AKP03R");
 
-    for (vid, pid, serial) in list_devices(&[VID]).await? {
-        println!("{} {} {}", vid, pid, serial);
-        if pid != PID {
+    for dev in list_devices(&[VID]).await? {
+        if dev.pid != PID {
             continue;
         }
 
-        println!("Connecting to {:04X}:{:04X}, {}", vid, pid, serial);
+        println!(
+            "Connecting to {:04X}:{:04X}, {}",
+            dev.vid, dev.pid, dev.serial_number
+        );
 
         // Connect to the device
-        let device = Device::connect(vid, pid, serial, true, false, 9, 3).await?;
+        let device = Device::connect(dev, true, false, 9, 3).await?;
 
         // Print out some info from the device
-        println!("Connected to '{}'", device.serial_number().unwrap());
+        println!("Connected to '{}'", device.serial_number());
 
         device.set_brightness(50).await?;
         device.clear_all_button_images().await?;

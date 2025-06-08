@@ -43,18 +43,21 @@ fn device_to_opendeck(key: u8) -> u8 {
 async fn main() -> Result<(), MirajazzError> {
     println!("Mirajazz example for Ajazz AKP153R");
 
-    for (vid, pid, serial) in list_devices(&[VID]).await? {
-        if pid != PID {
+    for dev in list_devices(&[VID]).await? {
+        if dev.pid != PID {
             continue;
         }
 
-        println!("Connecting to {:04X}:{:04X}, {}", vid, pid, serial);
+        println!(
+            "Connecting to {:04X}:{:04X}, {}",
+            dev.vid, dev.pid, dev.serial_number
+        );
 
         // Connect to the device
-        let device = Device::connect(vid, pid, serial, false, false, KEY_COUNT as usize, 0).await?;
+        let device = Device::connect(dev, false, false, KEY_COUNT as usize, 0).await?;
 
         // Print out some info from the device
-        println!("Connected to '{}'", device.serial_number().unwrap());
+        println!("Connected to '{}'", device.serial_number());
 
         device.set_brightness(50).await?;
         device.clear_all_button_images().await?;
