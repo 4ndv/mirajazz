@@ -15,6 +15,13 @@ impl DeviceInfo {
     }
 }
 
+/// Connection / Disconnection event for watchers
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
+pub enum DeviceLifecycleEvent {
+    Connected(DeviceInfo),
+    Disconnected(DeviceInfo),
+}
+
 /// Type of input that the device produced
 #[derive(Clone, Debug)]
 pub enum DeviceInput {

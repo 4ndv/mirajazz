@@ -11,6 +11,9 @@ use image::ImageError;
 /// Errors that can occur while working with devices
 #[derive(Debug)]
 pub enum MirajazzError {
+    /// Watcher is already initialized
+    WatcherAlreadyInitialized,
+
     /// No device found for specified vid, pid and serial
     DeviceNotFoundError,
 
