@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2025-06-08
+
+### 🚀 Features
+
+- Device connect/disconnect watcher
+
+### 🚜 Refactor
+
+- [**breaking**] Use new DeviceInfo struct instead of separate vid/pid/serial
+
 ## [0.4.0] - 2025-06-07
 
 ### 🚀 Features
