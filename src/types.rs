@@ -1,3 +1,20 @@
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
+pub struct DeviceInfo {
+    pub vid: u16,
+    pub pid: u16,
+    pub serial_number: String,
+}
+
+impl DeviceInfo {
+    pub fn new(vid: u16, pid: u16, serial_number: String) -> Self {
+        Self {
+            vid,
+            pid,
+            serial_number,
+        }
+    }
+}
+
 /// Type of input that the device produced
 #[derive(Clone, Debug)]
 pub enum DeviceInput {

@@ -20,7 +20,7 @@ use crate::{
     error::MirajazzError,
     images::convert_image_with_format,
     state::{DeviceState, DeviceStateReader},
-    types::{DeviceInput, ImageFormat},
+    types::{DeviceInfo, DeviceInput, ImageFormat},
 };
 
 /// Creates an instance of the async-hid backend
@@ -81,8 +81,6 @@ pub struct Device {
     encoder_count: usize,
     /// Packet size
     packet_size: usize,
-    /// Connected HIDDevice
-    hid_device: HidDevice,
     /// Device reader
     reader: Arc<Mutex<DeviceReader>>,
     /// Device writer
@@ -97,9 +95,7 @@ pub struct Device {
 impl Device {
     /// Attempts to connect to the device
     pub async fn connect(
-        vid: u16,
-        pid: u16,
-        serial: String,
+        dev: DeviceInfo,
         is_v2: bool,
         supports_both_states: bool,
         key_count: usize,
@@ -109,7 +105,13 @@ impl Device {
             .enumerate()
             .await?
             .find(|d| {
-                d.vendor_id == vid && d.product_id == pid && d.serial_number == Some(serial.clone())
+                if let Some(serial_number) = &d.serial_number {
+                    d.vendor_id == dev.vid
+                        && d.product_id == dev.pid
+                        && serial_number == &dev.serial_number
+                } else {
+                    false
+                }
             })
             .await;
 
@@ -117,14 +119,13 @@ impl Device {
             let (reader, writer) = hid_device.open().await?;
 
             Ok(Device {
-                vid,
-                pid,
-                serial_number: serial.to_string(),
+                vid: dev.vid,
+                pid: dev.pid,
+                serial_number: dev.serial_number,
                 is_v2,
                 supports_both_states,
                 key_count,
                 encoder_count,
-                hid_device,
                 reader: Arc::new(Mutex::new(reader)),
                 writer: Arc::new(Mutex::new(writer)),
                 packet_size: if is_v2 { 1024 } else { 512 },
@@ -150,8 +151,8 @@ impl Device {
     }
 
     /// Returns serial number of the device
-    pub fn serial_number(&self) -> Option<String> {
-        self.hid_device.serial_number.clone()
+    pub fn serial_number(&self) -> &String {
+        &self.serial_number
     }
 
     /// Initializes the device
