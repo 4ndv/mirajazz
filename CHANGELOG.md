@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2025-06-16
+
+### 🚀 Features
+
+- New querying method, dropped async-io dependency, reworked reader, dropped own DeviceInfo in favor of async-hid's DeviceInfo
+
 ## [0.5.0] - 2025-06-08
 
 ### 🚀 Features
