@@ -1,14 +1,12 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
-
 use image::open;
 use mirajazz::{
-    device::{list_devices, Device},
+    device::{list_devices, Device, DeviceQuery},
     error::MirajazzError,
     types::{DeviceInput, ImageFormat, ImageMirroring, ImageMode, ImageRotation},
 };
+use std::{thread::sleep, time::Duration};
 
-const VID: u16 = 0x0300;
-const PID: u16 = 0x1020;
+const QUERY: DeviceQuery = DeviceQuery::new(65440, 2, 0x0300, 0x1020);
 
 const KEY_COUNT: u8 = 18;
 
@@ -43,18 +41,16 @@ fn device_to_opendeck(key: u8) -> u8 {
 async fn main() -> Result<(), MirajazzError> {
     println!("Mirajazz example for Ajazz AKP153R");
 
-    for dev in list_devices(&[VID]).await? {
-        if dev.pid != PID {
-            continue;
-        }
-
+    for dev in list_devices(&[QUERY]).await? {
         println!(
             "Connecting to {:04X}:{:04X}, {}",
-            dev.vid, dev.pid, dev.serial_number
+            dev.vendor_id,
+            dev.product_id,
+            dev.serial_number.clone().unwrap()
         );
 
         // Connect to the device
-        let device = Device::connect(dev, false, false, KEY_COUNT as usize, 0).await?;
+        let device = Device::connect(&dev, false, false, KEY_COUNT as usize, 0).await?;
 
         // Print out some info from the device
         println!("Connected to '{}'", device.serial_number());
@@ -77,23 +73,20 @@ async fn main() -> Result<(), MirajazzError> {
             device.flush().await?;
         }
 
-        let device = Arc::new(device);
-        {
-            let reader = device.get_reader(|key, _state| {
-                println!("Key {}, converted {}", key, device_to_opendeck(key));
+        let reader = device.get_reader(|key, _state| {
+            println!("Key {}, converted {}", key, device_to_opendeck(key));
 
-                Ok(DeviceInput::NoData)
-            });
+            Ok(DeviceInput::NoData)
+        });
 
-            loop {
-                match reader.read(None).await {
-                    Ok(updates) => updates,
-                    Err(_) => break,
-                };
-            }
-
-            drop(reader);
+        loop {
+            match reader.read(None).await {
+                Ok(updates) => updates,
+                Err(_) => break,
+            };
         }
+
+        drop(reader);
 
         device.shutdown().await?;
     }

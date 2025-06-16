@@ -1,25 +1,13 @@
-#[derive(Eq, PartialEq, Hash, Clone, Debug)]
-pub struct DeviceInfo {
-    pub vid: u16,
-    pub pid: u16,
-    pub serial_number: String,
-}
+use async_hid::{Device as AsyncHidDevice, DeviceInfo as AsyncHidDeviceInfo};
 
-impl DeviceInfo {
-    pub fn new(vid: u16, pid: u16, serial_number: String) -> Self {
-        Self {
-            vid,
-            pid,
-            serial_number,
-        }
-    }
-}
+pub type HidDeviceInfo = AsyncHidDeviceInfo;
+pub type HidDevice = AsyncHidDevice;
 
 /// Connection / Disconnection event for watchers
-#[derive(Eq, PartialEq, Hash, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Debug)]
 pub enum DeviceLifecycleEvent {
-    Connected(DeviceInfo),
-    Disconnected(DeviceInfo),
+    Connected(HidDeviceInfo),
+    Disconnected(HidDeviceInfo),
 }
 
 /// Type of input that the device produced

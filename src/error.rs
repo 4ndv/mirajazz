@@ -14,8 +14,11 @@ pub enum MirajazzError {
     /// Watcher is already initialized
     WatcherAlreadyInitialized,
 
-    /// No device found for specified vid, pid and serial
+    /// No device found for provided device info
     DeviceNotFoundError,
+
+    /// Invalid device provided
+    InvalidDeviceError,
 
     /// HidApi error
     HidError(HidError),

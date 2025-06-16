@@ -1,9 +1,8 @@
 use async_hid::{
-    AsyncHidRead, AsyncHidWrite, Device as HidDevice, DeviceId, DeviceInfo as HidDeviceInfo,
-    DeviceReader, DeviceWriter, HidBackend,
+    AsyncHidWrite, Device as HidDevice, DeviceId, DeviceInfo as HidDeviceInfo, DeviceReader,
+    DeviceWriter, HidBackend,
 };
-use async_io::Timer;
-use futures_lite::{FutureExt, Stream, StreamExt};
+use futures_lite::{Stream, StreamExt};
 use image::DynamicImage;
 use std::{
     collections::{HashMap, HashSet},
@@ -13,7 +12,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Duration,
 };
 use tokio::sync::Mutex;
 
@@ -21,7 +19,7 @@ use crate::{
     error::MirajazzError,
     images::convert_image_with_format,
     state::{DeviceState, DeviceStateReader},
-    types::{DeviceInfo, DeviceInput, DeviceLifecycleEvent, ImageFormat},
+    types::{DeviceInput, DeviceLifecycleEvent, ImageFormat},
 };
 
 /// Creates an instance of the async-hid backend
@@ -31,32 +29,51 @@ pub fn new_hid_backend() -> HidBackend {
     HidBackend::default()
 }
 
-fn hid_device_info_to_lib_device_info(
-    vids: &[u16],
-    device_info: HidDeviceInfo,
-) -> Option<DeviceInfo> {
-    if !vids.contains(&device_info.vendor_id) {
+/// Struct for finding specific connected device
+#[derive(Debug, Clone)]
+pub struct DeviceQuery {
+    usage_page: u16,
+    usage_id: u16,
+    vendor_id: u16,
+    product_id: u16,
+}
+
+impl DeviceQuery {
+    pub const fn new(usage_page: u16, usage_id: u16, vendor_id: u16, product_id: u16) -> Self {
+        Self {
+            usage_page,
+            usage_id,
+            vendor_id,
+            product_id,
+        }
+    }
+}
+
+fn check_device(device: HidDevice, queries: &[DeviceQuery]) -> Option<HidDevice> {
+    if !queries.iter().any(|query| {
+        device.matches(
+            query.usage_page,
+            query.usage_id,
+            query.vendor_id,
+            query.product_id,
+        )
+    }) {
         return None;
     }
 
-    if let Some(serial) = device_info.serial_number {
-        Some(DeviceInfo::new(
-            device_info.vendor_id,
-            device_info.product_id,
-            serial.to_string(),
-        ))
+    if device.serial_number.is_some() {
+        Some(device)
     } else {
         None
     }
 }
 
 /// Returns a list of devices as (Kind, Serial Number) that could be found using hid backend.
-pub async fn list_devices(vids: &[u16]) -> Result<HashSet<DeviceInfo>, MirajazzError> {
+pub async fn list_devices(queries: &[DeviceQuery]) -> Result<HashSet<HidDevice>, MirajazzError> {
     let devices = HidBackend::default()
         .enumerate()
         .await?
-        .map(HidDevice::to_device_info)
-        .filter_map(|d| hid_device_info_to_lib_device_info(vids, d))
+        .filter_map(|d| check_device(d, queries))
         .collect::<HashSet<_>>()
         .await;
 
@@ -65,8 +82,8 @@ pub async fn list_devices(vids: &[u16]) -> Result<HashSet<DeviceInfo>, MirajazzE
 
 pub struct DeviceWatcher {
     initialized: bool,
-    id_map: Arc<Mutex<HashMap<DeviceId, DeviceInfo>>>,
-    connected: Arc<Mutex<HashSet<DeviceInfo>>>,
+    id_map: Arc<Mutex<HashMap<DeviceId, HidDeviceInfo>>>,
+    connected: Arc<Mutex<HashSet<HidDeviceInfo>>>,
 }
 
 impl DeviceWatcher {
@@ -86,7 +103,7 @@ impl DeviceWatcher {
     /// **NOTE:** Can only be called once per instance of [DeviceWatcher]
     pub async fn watch<'a>(
         &'a mut self,
-        vids: &'a [u16],
+        queries: &'a [DeviceQuery],
     ) -> Result<impl Stream<Item = DeviceLifecycleEvent> + Send + Unpin + use<'a>, MirajazzError>
     {
         let backend = HidBackend::default();
@@ -97,12 +114,11 @@ impl DeviceWatcher {
 
         self.initialized = true;
 
-        // We need to fill the devices list beforehand, because
+        // We need to fill the devices list beforehand, because we need to track disconnected devices
         let already_connected = HidBackend::default()
             .enumerate()
             .await?
-            .map(HidDevice::to_device_info)
-            .filter_map(|d| Some((d.id.clone(), hid_device_info_to_lib_device_info(vids, d)?)))
+            .filter_map(|d| Some((d.id.clone(), check_device(d, queries)?)))
             .collect::<HashSet<_>>()
             .await;
 
@@ -111,7 +127,7 @@ impl DeviceWatcher {
 
         for (id, device) in already_connected.into_iter() {
             map.insert(id, device.clone());
-            connected.insert(device);
+            connected.insert(device.clone());
         }
 
         drop(map);
@@ -128,8 +144,9 @@ impl DeviceWatcher {
                             .unwrap()
                             .last()?;
 
-                        let info =
-                            hid_device_info_to_lib_device_info(vids, device.to_device_info())?;
+                        let device = check_device(device, queries)?;
+                        let info = device.clone();
+                        drop(device);
 
                         self.id_map.lock().await.insert(device_id, info.clone());
                         let new = self.connected.lock().await.insert(info.clone());
@@ -200,46 +217,40 @@ pub struct Device {
 impl Device {
     /// Attempts to connect to the device
     pub async fn connect(
-        dev: DeviceInfo,
+        dev: &HidDeviceInfo,
         is_v2: bool,
         supports_both_states: bool,
         key_count: usize,
         encoder_count: usize,
     ) -> Result<Device, MirajazzError> {
-        let hid_device = HidBackend::default()
-            .enumerate()
-            .await?
-            .find(|d| {
-                if let Some(serial_number) = &d.serial_number {
-                    d.vendor_id == dev.vid
-                        && d.product_id == dev.pid
-                        && serial_number == &dev.serial_number
-                } else {
-                    false
-                }
-            })
-            .await;
+        let device = HidBackend::default().query_devices(&dev.id).await?.last();
 
-        if let Some(hid_device) = hid_device {
-            let (reader, writer) = hid_device.open().await?;
+        let device = match device {
+            Some(device) => device,
+            None => return Err(MirajazzError::DeviceNotFoundError),
+        };
 
-            Ok(Device {
-                vid: dev.vid,
-                pid: dev.pid,
-                serial_number: dev.serial_number,
-                is_v2,
-                supports_both_states,
-                key_count,
-                encoder_count,
-                reader: Arc::new(Mutex::new(reader)),
-                writer: Arc::new(Mutex::new(writer)),
-                packet_size: if is_v2 { 1024 } else { 512 },
-                image_cache: Mutex::new(vec![]),
-                initialized: false.into(),
-            })
-        } else {
-            Err(MirajazzError::DeviceNotFoundError)
-        }
+        let serial_number = match device.serial_number.clone() {
+            Some(serial) => serial,
+            None => return Err(MirajazzError::InvalidDeviceError),
+        };
+
+        let (reader, writer) = device.open().await?;
+
+        Ok(Device {
+            vid: device.vendor_id,
+            pid: device.product_id,
+            serial_number,
+            is_v2,
+            supports_both_states,
+            key_count,
+            encoder_count,
+            reader: Arc::new(Mutex::new(reader)),
+            writer: Arc::new(Mutex::new(writer)),
+            packet_size: if is_v2 { 1024 } else { 512 },
+            image_cache: Mutex::new(vec![]),
+            initialized: false.into(),
+        })
     }
 }
 
@@ -282,39 +293,6 @@ impl Device {
     /// Returns value of `supports_both_states` field
     pub fn supports_both_states(&self) -> bool {
         self.supports_both_states
-    }
-
-    /// Reads current input state from the device and calls provided function for processing
-    pub async fn read_input(
-        &self,
-        timeout: Option<Duration>,
-        process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
-    ) -> Result<DeviceInput, MirajazzError> {
-        self.initialize().await?;
-
-        let data = if timeout.is_some() {
-            self.read_data_with_timeout(512, timeout.unwrap()).await?
-        } else {
-            Some(self.read_data(512).await?)
-        };
-
-        if data.is_none() {
-            return Ok(DeviceInput::NoData);
-        }
-
-        let data = data.unwrap();
-
-        if data[0] == 0 {
-            return Ok(DeviceInput::NoData);
-        }
-
-        let state = if self.supports_both_states() {
-            data[10]
-        } else {
-            0x1u8
-        };
-
-        Ok(process_input(data[9], state)?)
     }
 
     /// Resets the device
@@ -505,16 +483,17 @@ impl Device {
     ///
     /// Accepts function pointer for a function that maps raw device inputs to [DeviceInput]
     pub fn get_reader(
-        self: &Arc<Self>,
+        &self,
         process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
     ) -> Arc<DeviceStateReader> {
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(DeviceStateReader {
-            device: self.clone(),
+            reader: self.reader.clone(),
             states: Mutex::new(DeviceState {
                 buttons: vec![false; self.key_count],
                 encoders: vec![false; self.encoder_count],
             }),
+            supports_both_states: self.supports_both_states,
             process_input,
         })
     }
@@ -546,43 +525,6 @@ impl Device {
         }
 
         Ok(())
-    }
-
-    /// Reads data from device
-    pub async fn read_data(&self, length: usize) -> Result<Vec<u8>, MirajazzError> {
-        let mut buf = vec![0u8; length];
-
-        let _size = self.reader.lock().await.read_input_report(&mut buf).await?;
-
-        Ok(buf)
-    }
-
-    /// Reads data from device with specified timeout
-    ///
-    /// Returns [Some] if there was any data, returns [None] if timeout was reached before reading something
-    pub async fn read_data_with_timeout(
-        &self,
-        length: usize,
-        timeout: Duration,
-    ) -> Result<Option<Vec<u8>>, MirajazzError> {
-        let mut buf = vec![0u8; length];
-
-        let size = self
-            .reader
-            .lock()
-            .await
-            .read_input_report(&mut buf)
-            .or(async {
-                Timer::after(timeout).await;
-                Ok(0)
-            })
-            .await?;
-
-        if size == 0 {
-            return Ok(None);
-        }
-
-        Ok(Some(buf))
     }
 
     /// Writes data to device
