@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2025-06-19
+
+### 🐛 Bug Fixes
+
+- Device watcher now applies checks in correct order, fixes windows
+
 ## [0.6.0] - 2025-06-16
 
 ### 🚀 Features
