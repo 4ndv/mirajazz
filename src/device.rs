@@ -142,9 +142,9 @@ impl DeviceWatcher {
                             .query_devices(&device_id)
                             .await
                             .unwrap()
+                            .filter_map(|d| check_device(d, queries))
                             .last()?;
 
-                        let device = check_device(device, queries)?;
                         let info = device.clone();
                         drop(device);
 
