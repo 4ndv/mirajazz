@@ -19,6 +19,15 @@ The idea is to have a common lowlevel library serving as a backbone for device-s
 - Depends on tokio for wrapping synchronous image manipulation tasks
 - No way to read firmware version due to async-hid not supporting feature reports for now
 
+## Reference implementations
+
+There is couple OpenDeck plugins made by me, which can be used as a starting point for making your own:
+
+- [opendeck-akp03](https://github.com/4ndv/opendeck-akp03) for Ajazz AKP 03 / Mirabox N3 and derivatives
+- [opendeck-akp153](https://github.com/4ndv/opendeck-akp153) for Ajazz AKP153 / Mirabox HSV293S and derivatives
+
+If you plan to fork any of them, [here's the checklist](https://github.com/4ndv/mirajazz/wiki/Checklist-for-forking-my-existing-plugins) of things you'll need to do
+
 ## udev rules
 
 For using on Linux, you are required to bring your own udev rules for all the VID/PID pairs you want to support. Without the udev rules, you wouldn't be able to connect to the devices from the userspace.
