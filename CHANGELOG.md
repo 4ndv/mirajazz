@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2025-06-28
+
+### 💼 Other
+
+- *(deps)* Bump async-hid to 0.4.4
+
+### 📚 Documentation
+
+- Linked existing plugins and moved forking checklist to a wiki
+
 ## [0.6.1] - 2025-06-19
 
 ### 🐛 Bug Fixes
