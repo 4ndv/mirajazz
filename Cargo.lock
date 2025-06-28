@@ -19,9 +19,9 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
 name = "async-hid"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "292ddc7b0aaebeb44550e8e1e8c4f15cc4c5d4ef683ecfed11126fb955510939"
+checksum = "aab637ea12169f6c473eaed9fe56843490146e3d431dbe408ca86d92edf79c2e"
 dependencies = [
  "atomic-waker",
  "block2",

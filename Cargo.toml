@@ -13,7 +13,7 @@ license = "MPL-2.0"
 pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]
 
 [dependencies]
-async-hid = { version = "0.4.3", default-features = false, features = ["tokio", "win32"] }
+async-hid = { version = "0.4.4", default-features = false, features = ["tokio", "win32"] }
 image = { version = "0.25.6", default-features = false, features = ["bmp", "jpeg"] }
 futures-lite = "2.6.0"
 tokio = { version = "1.45.1", features = ["rt", "rt-multi-thread", "sync", "time"] }
