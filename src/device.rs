@@ -507,16 +507,18 @@ impl Device {
         let mut page_number = 0;
         let mut bytes_remaining = image_data.len();
 
+        let mut buf: Vec<u8> = Vec::with_capacity(image_report_length);
         while bytes_remaining > 0 {
             let this_length = bytes_remaining.min(image_report_payload_length);
             let bytes_sent = page_number * image_report_payload_length;
 
             // Header
-            let mut buf: Vec<u8> = [0x00].to_vec();
+            buf.clear();
+            buf.push(0x00);
             buf.extend(&image_data[bytes_sent..bytes_sent + this_length]);
 
             // Adding padding
-            buf.extend(vec![0u8; image_report_length - buf.len()]);
+            buf.resize(image_report_length, 0);
 
             self.write_data(&buf).await?;
 
@@ -539,7 +541,7 @@ impl Device {
 
     /// Writes data to device extending payload to the required size
     pub async fn write_extended_data(&self, payload: &mut Vec<u8>) -> Result<(), MirajazzError> {
-        payload.extend(vec![0u8; 1 + self.packet_size - payload.len()]);
+        payload.resize(1 + self.packet_size, 0);
 
         self.write_data(payload).await
     }
