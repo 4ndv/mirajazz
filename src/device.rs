@@ -543,4 +543,10 @@ impl Device {
 
         self.write_data(payload).await
     }
+
+    /// Set the device mode, for some devices it's required to set the device to the correct mode before sending any other command
+    pub async fn set_mode(&self, mode: u8) -> Result<(), MirajazzError> {
+        let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x4D, 0x4F, 0x44, 0x00, 0x00, 0x30 + mode];
+        self.write_extended_data(&mut buf).await
+    }
 }
