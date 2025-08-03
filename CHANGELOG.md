@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2025-08-03
+
+### 🚀 Features
+
+- Added `set_mode` function for multimodal devices (#3)
+
+### 🚜 Refactor
+
+- Remove some unneeded Vec allocations (#4)
+
+### 📚 Documentation
+
+- Added note about v1 devices serial number to readme
+
 ## [0.6.2] - 2025-06-28
 
 ### 💼 Other
