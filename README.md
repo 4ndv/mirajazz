@@ -18,6 +18,10 @@ The idea is to have a common lowlevel library serving as a backbone for device-s
 
 - Depends on tokio for wrapping synchronous image manipulation tasks
 - No way to read firmware version due to async-hid not supporting feature reports for now
+- "Old" devices have several issues with their serial number:
+  - The serial number is same for all the devices: `355499441494`
+  - On Windows the serial number changes each time device is reconnected
+  - If you have the device that always returns this serial number, just hardcode it...
 
 ## Reference implementations
 
