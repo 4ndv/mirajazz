@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2025-08-30
+
+### 🚜 Refactor
+
+- [**breaking**] Change is_v2 bool to protocol_version usize
+
 ## [0.7.0] - 2025-08-03
 
 ### 🚀 Features
