@@ -50,7 +50,7 @@ async fn main() -> Result<(), MirajazzError> {
         );
 
         // Connect to the device
-        let device = Device::connect(&dev, false, false, KEY_COUNT as usize, 0).await?;
+        let device = Device::connect(&dev, 1, false, KEY_COUNT as usize, 0).await?;
 
         // Print out some info from the device
         println!("Connected to '{}'", device.serial_number());

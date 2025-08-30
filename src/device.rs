@@ -193,8 +193,8 @@ pub struct Device {
     pub pid: u16,
     /// Serial number
     pub serial_number: String,
-    /// Use v2 hacks
-    is_v2: bool,
+    /// Protocol version
+    protocol_version: usize,
     /// Emits two events for buttons or not
     supports_both_states: bool,
     /// Number of keys
@@ -218,7 +218,7 @@ impl Device {
     /// Attempts to connect to the device
     pub async fn connect(
         dev: &HidDeviceInfo,
-        is_v2: bool,
+        protocol_version: usize,
         supports_both_states: bool,
         key_count: usize,
         encoder_count: usize,
@@ -237,17 +237,22 @@ impl Device {
 
         let (reader, writer) = device.open().await?;
 
+        assert!(
+            protocol_version <= 2,
+            "Maximum supported protocol version is 2"
+        );
+
         Ok(Device {
             vid: device.vendor_id,
             pid: device.product_id,
             serial_number,
-            is_v2,
+            protocol_version,
             supports_both_states,
             key_count,
             encoder_count,
             reader: Arc::new(Mutex::new(reader)),
             writer: Arc::new(Mutex::new(writer)),
-            packet_size: if is_v2 { 1024 } else { 512 },
+            packet_size: if protocol_version == 2 { 1024 } else { 512 },
             image_cache: Mutex::new(vec![]),
             initialized: false.into(),
         })
@@ -392,8 +397,8 @@ impl Device {
 
         self.clear_button_image(0xFF).await?;
 
-        if self.is_v2 {
-            // Mirabox "v2" requires STP to commit clearing the screen
+        if self.protocol_version == 2 {
+            // Protocol v2 requires STP to commit clearing the screen
             let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x53, 0x54, 0x50];
 
             self.write_extended_data(&mut buf).await?;
@@ -548,7 +553,20 @@ impl Device {
 
     /// Set the device mode, for some devices it's required to set the device to the correct mode before sending any other command
     pub async fn set_mode(&self, mode: u8) -> Result<(), MirajazzError> {
-        let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x4D, 0x4F, 0x44, 0x00, 0x00, 0x30 + mode];
+        let mut buf = vec![
+            0x00,
+            0x43,
+            0x52,
+            0x54,
+            0x00,
+            0x00,
+            0x4D,
+            0x4F,
+            0x44,
+            0x00,
+            0x00,
+            0x30 + mode,
+        ];
         self.write_extended_data(&mut buf).await
     }
 }
