@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.9.0] - 2025-09-11
+## [0.10.0] - 2026-02-27
+
+### 🚀 Features
+
+- Supports_both_encoder_states capability flag (#8)
 
 ### 🚜 Refactor
 
@@ -11,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### 📚 Documentation
 
 - Added protocol versions documentation
+- *(device)* Flags
 
 ### ⚙️ Miscellaneous Tasks
 
