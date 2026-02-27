@@ -61,6 +61,16 @@ Example devices: Mirabox N3, Ajazz AKP03 (and variations, with PID starting with
 
 Example devices: Mirabox N3 rev. 2 (PID 1003), Mirabox N4, Akp03 rev. 2 (PIDs starting with 3)
 
+## Flags
+
+In some cases specific devices are not covered just by matching by protocol version
+
+### `with_supports_both_encoder_states(supports: bool)`
+
+Allows to disable handling both "Up" and "Down" states for encoder presses
+
+Default: true if protocol_version > 2
+
 ## Current limitations
 
 - Depends on tokio for wrapping synchronous image manipulation tasks
