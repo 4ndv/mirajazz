@@ -8,6 +8,12 @@ All notable changes to this project will be documented in this file.
 
 - Supports_both_encoder_states capability flag (#8)
 
+### 📚 Documentation
+
+- *(device)* Flags
+
+## [0.9.0] - 2025-09-11
+
 ### 🚜 Refactor
 
 - [**breaking**] Move supports_both_states to a separate protocol_version 3, added fallback protocol_version 0 for pv 1 devices with really old firmware
@@ -15,7 +21,6 @@ All notable changes to this project will be documented in this file.
 ### 📚 Documentation
 
 - Added protocol versions documentation
-- *(device)* Flags
 
 ### ⚙️ Miscellaneous Tasks
 
