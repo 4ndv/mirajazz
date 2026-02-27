@@ -35,6 +35,7 @@ pub struct DeviceState {
 /// You can only have one active reader per device at a time
 pub struct DeviceStateReader {
     pub protocol_version: usize,
+    pub supports_both_encoder_states: bool,
     pub reader: Arc<Mutex<DeviceReader>>,
     pub states: Mutex<DeviceState>,
     pub process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
@@ -157,7 +158,7 @@ impl DeviceStateReader {
                 for (index, (their, mine)) in
                     zip(encoders.iter(), my_states.encoders.iter()).enumerate()
                 {
-                    if !self.supports_both_states() {
+                    if !self.supports_both_encoder_states {
                         if *their {
                             updates.push(DeviceStateUpdate::EncoderDown(index as u8));
                             updates.push(DeviceStateUpdate::EncoderUp(index as u8));

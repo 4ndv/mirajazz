@@ -191,6 +191,8 @@ pub struct Device {
     pub serial_number: String,
     /// Protocol version
     protocol_version: usize,
+    /// Whether the device is capable of reporting EncoderUp
+    supports_both_encoder_states: bool,
     /// Number of keys
     key_count: usize,
     /// Number of encoders
@@ -265,6 +267,7 @@ impl Device {
             pid: device.product_id,
             serial_number,
             protocol_version: override_protocol_version,
+            supports_both_encoder_states: override_protocol_version > 2,
             key_count,
             encoder_count,
             reader: Arc::new(Mutex::new(reader)),
@@ -273,6 +276,14 @@ impl Device {
             image_cache: Mutex::new(vec![]),
             initialized: false.into(),
         })
+    }
+
+    pub fn with_supports_both_encoder_states(
+        mut self,
+        supports: bool,
+    ) -> Self {
+        self.supports_both_encoder_states = supports;
+        self
     }
 }
 
@@ -291,6 +302,10 @@ impl Device {
     /// Returns serial number of the device
     pub fn serial_number(&self) -> &String {
         &self.serial_number
+    }
+
+    pub fn supports_both_encoder_states(&self) -> bool {
+        self.supports_both_encoder_states
     }
 
     /// Initializes the device
@@ -506,6 +521,7 @@ impl Device {
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(DeviceStateReader {
             protocol_version: self.protocol_version,
+            supports_both_encoder_states: self.supports_both_encoder_states,
             reader: self.reader.clone(),
             states: Mutex::new(DeviceState {
                 buttons: vec![false; self.key_count],
