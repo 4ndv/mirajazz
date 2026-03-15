@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2026-03-15
+
+### 🚀 Features
+
+- Reading device firmware version
+
+### 💼 Other
+
+- *(deps)* Bump async-hid to 0.5.0
+
+### 🚜 Refactor
+
+- Remove unused string handling code
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix changelog
+
 ## [0.10.0] - 2026-02-27
 
 ### 🚀 Features
