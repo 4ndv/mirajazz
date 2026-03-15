@@ -231,12 +231,7 @@ impl Device {
             None => return Err(MirajazzError::DeviceNotFoundError),
         };
 
-        let mut fw_buffer = [0u8; 20];
-        fw_buffer[0] = 0x01;
-
-        let firmware_version_size = device.read_feature_report(&mut fw_buffer).await?;
-        let firmware_version =
-            String::from_utf8_lossy(&fw_buffer[..firmware_version_size]).to_string();
+        let firmware_version = Device::read_firmware_version_from_raw_device(&device).await?;
 
         let serial_number = match (device.serial_number.clone(), protocol_version) {
             // There is pv 1 devices that don't have serial number *at all*
@@ -282,9 +277,31 @@ impl Device {
         })
     }
 
+    pub async fn read_firmware_version(dev: &HidDeviceInfo) -> Result<String, MirajazzError> {
+        let device = HidBackend::default().query_devices(&dev.id).await?.last();
+
+        let device = match device {
+            Some(device) => device,
+            None => return Err(MirajazzError::DeviceNotFoundError),
+        };
+
+        Device::read_firmware_version_from_raw_device(&device).await
+    }
+
     pub fn with_supports_both_encoder_states(mut self, supports: bool) -> Self {
         self.supports_both_encoder_states = supports;
         self
+    }
+
+    pub async fn read_firmware_version_from_raw_device(
+        dev: &HidDevice,
+    ) -> Result<String, MirajazzError> {
+        let mut fw_buffer = [0u8; 20];
+        fw_buffer[0] = 0x01;
+
+        let firmware_version_size = dev.read_feature_report(&mut fw_buffer).await?;
+
+        Ok(String::from_utf8_lossy(&fw_buffer[..firmware_version_size]).to_string())
     }
 }
 
