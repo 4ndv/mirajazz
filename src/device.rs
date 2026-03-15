@@ -183,6 +183,8 @@ pub struct Device {
     pub pid: u16,
     /// Serial number
     pub serial_number: String,
+    /// Firmware version
+    pub firmware_version: String,
     /// Protocol version
     protocol_version: usize,
     /// Whether the device is capable of reporting EncoderUp
@@ -229,6 +231,13 @@ impl Device {
             None => return Err(MirajazzError::DeviceNotFoundError),
         };
 
+        let mut fw_buffer = [0u8; 20];
+        fw_buffer[0] = 0x01;
+
+        let firmware_version_size = device.read_feature_report(&mut fw_buffer).await?;
+        let firmware_version =
+            String::from_utf8_lossy(&fw_buffer[..firmware_version_size]).to_string();
+
         let serial_number = match (device.serial_number.clone(), protocol_version) {
             // There is pv 1 devices that don't have serial number *at all*
             //
@@ -260,6 +269,7 @@ impl Device {
             vid: device.vendor_id,
             pid: device.product_id,
             serial_number,
+            firmware_version,
             protocol_version: override_protocol_version,
             supports_both_encoder_states: override_protocol_version > 2,
             key_count,
@@ -272,10 +282,7 @@ impl Device {
         })
     }
 
-    pub fn with_supports_both_encoder_states(
-        mut self,
-        supports: bool,
-    ) -> Self {
+    pub fn with_supports_both_encoder_states(mut self, supports: bool) -> Self {
         self.supports_both_encoder_states = supports;
         self
     }

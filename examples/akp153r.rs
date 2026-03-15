@@ -53,7 +53,11 @@ async fn main() -> Result<(), MirajazzError> {
         let device = Device::connect(&dev, 1, KEY_COUNT as usize, 0).await?;
 
         // Print out some info from the device
-        println!("Connected to '{}'", device.serial_number());
+        println!(
+            "Connected to '{}', fw: {}",
+            device.serial_number(),
+            device.firmware_version
+        );
 
         device.set_brightness(50).await?;
         device.clear_all_button_images().await?;
