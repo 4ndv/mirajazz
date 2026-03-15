@@ -1,7 +1,6 @@
 use std::{
     error::Error,
     fmt::{Display, Formatter},
-    str::Utf8Error,
     sync::PoisonError,
 };
 
@@ -22,9 +21,6 @@ pub enum MirajazzError {
 
     /// HidApi error
     HidError(HidError),
-
-    /// Failed to convert bytes into string
-    Utf8Error(Utf8Error),
 
     /// Failed to encode image
     ImageError(ImageError),
@@ -59,12 +55,6 @@ impl Error for MirajazzError {}
 impl From<HidError> for MirajazzError {
     fn from(e: HidError) -> Self {
         Self::HidError(e)
-    }
-}
-
-impl From<Utf8Error> for MirajazzError {
-    fn from(e: Utf8Error) -> Self {
-        Self::Utf8Error(e)
     }
 }
 
