@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.1] - 2026-03-15
+
+### 🚀 Features
+
+- Function for reading firmware version without connecting
+
+### ⚙️ Miscellaneous Tasks
+
+- *(example)* Added example for reading firmware version
+
 ## [0.11.0] - 2026-03-15
 
 ### 🚀 Features
