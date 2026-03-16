@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.2] - 2026-03-16
+
+### 💼 Other
+
+- *(deps)* Bump async-hid to 0.5.1, fixing build with older macOS SDKs
+
 ## [0.11.1] - 2026-03-15
 
 ### 🚀 Features
