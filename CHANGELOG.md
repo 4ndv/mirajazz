@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1] - 2026-03-18
+
+### 🐛 Bug Fixes
+
+- *(windows)* Stub correct function for reading firmware
+
 ## [0.12.0] - 2026-03-18
 
 ### 🐛 Bug Fixes
