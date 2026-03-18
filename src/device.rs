@@ -277,7 +277,6 @@ impl Device {
         })
     }
 
-    #[cfg(not(target_os = "windows"))]
     pub async fn read_firmware_version(
         dev: &HidDeviceInfo,
     ) -> Result<Option<String>, MirajazzError> {
@@ -291,19 +290,12 @@ impl Device {
         Device::read_firmware_version_from_raw_device(&device).await
     }
 
-    // TRACK: https://github.com/4ndv/mirajazz/issues/10
-    #[cfg(target_os = "windows")]
-    pub async fn read_firmware_version(
-        dev: &HidDeviceInfo,
-    ) -> Result<Option<String>, MirajazzError> {
-        Ok(None)
-    }
-
     pub fn with_supports_both_encoder_states(mut self, supports: bool) -> Self {
         self.supports_both_encoder_states = supports;
         self
     }
 
+    #[cfg(not(target_os = "windows"))]
     pub async fn read_firmware_version_from_raw_device(
         dev: &HidDevice,
     ) -> Result<Option<String>, MirajazzError> {
@@ -315,6 +307,14 @@ impl Device {
         Ok(Some(
             String::from_utf8_lossy(&fw_buffer[..firmware_version_size]).to_string(),
         ))
+    }
+
+    // TRACK: https://github.com/4ndv/mirajazz/issues/10
+    #[cfg(target_os = "windows")]
+    pub async fn read_firmware_version_from_raw_device(
+        dev: &HidDevice,
+    ) -> Result<Option<String>, MirajazzError> {
+        Ok(None)
     }
 }
 
