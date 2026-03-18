@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2026-03-18
+
+### 🐛 Bug Fixes
+
+- *(device)* Make firmware version an Option, don't try to read it on Windows
+
 ## [0.11.2] - 2026-03-16
 
 ### 💼 Other
