@@ -184,7 +184,7 @@ pub struct Device {
     /// Serial number
     pub serial_number: String,
     /// Firmware version
-    pub firmware_version: String,
+    pub firmware_version: Option<String>,
     /// Protocol version
     protocol_version: usize,
     /// Whether the device is capable of reporting EncoderUp
@@ -277,7 +277,10 @@ impl Device {
         })
     }
 
-    pub async fn read_firmware_version(dev: &HidDeviceInfo) -> Result<String, MirajazzError> {
+    #[cfg(not(target_os = "windows"))]
+    pub async fn read_firmware_version(
+        dev: &HidDeviceInfo,
+    ) -> Result<Option<String>, MirajazzError> {
         let device = HidBackend::default().query_devices(&dev.id).await?.last();
 
         let device = match device {
@@ -288,6 +291,14 @@ impl Device {
         Device::read_firmware_version_from_raw_device(&device).await
     }
 
+    // TRACK: https://github.com/4ndv/mirajazz/issues/10
+    #[cfg(target_os = "windows")]
+    pub async fn read_firmware_version(
+        dev: &HidDeviceInfo,
+    ) -> Result<Option<String>, MirajazzError> {
+        Ok(None)
+    }
+
     pub fn with_supports_both_encoder_states(mut self, supports: bool) -> Self {
         self.supports_both_encoder_states = supports;
         self
@@ -295,13 +306,15 @@ impl Device {
 
     pub async fn read_firmware_version_from_raw_device(
         dev: &HidDevice,
-    ) -> Result<String, MirajazzError> {
+    ) -> Result<Option<String>, MirajazzError> {
         let mut fw_buffer = [0u8; 20];
         fw_buffer[0] = 0x01;
 
         let firmware_version_size = dev.read_feature_report(&mut fw_buffer).await?;
 
-        Ok(String::from_utf8_lossy(&fw_buffer[..firmware_version_size]).to_string())
+        Ok(Some(
+            String::from_utf8_lossy(&fw_buffer[..firmware_version_size]).to_string(),
+        ))
     }
 }
 

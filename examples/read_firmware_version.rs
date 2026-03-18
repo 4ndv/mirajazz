@@ -33,7 +33,7 @@ async fn main() -> Result<(), MirajazzError> {
 
     for dev in devices {
         println!(
-            "Firmware version: {}",
+            "Firmware version: {:?}",
             Device::read_firmware_version(&dev).await?
         );
     }
