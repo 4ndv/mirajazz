@@ -383,6 +383,41 @@ impl Device {
         Ok(())
     }
 
+    /// Sets brightness of the knob LEDs, value range is 0 - 100
+    pub async fn set_led_brightness(&self, percent: u8) -> Result<(), MirajazzError> {
+        self.initialize().await?;
+
+        let percent = percent.clamp(0, 100);
+
+        let mut buf = vec![
+            0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x4c, 0x42, 0x4c, 0x49, 0x47, percent,
+        ];
+
+        self.write_extended_data(&mut buf).await?;
+
+        Ok(())
+    }
+
+    /// Sets the color of each knob LED individually.
+    /// `colors` must contain exactly one `[r, g, b]` entry per LED.
+    pub async fn set_led_colors(&self, colors: &[[u8; 3]]) -> Result<(), MirajazzError> {
+        self.initialize().await?;
+
+        let mut buf = vec![
+            0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x53, 0x45, 0x54, 0x4c, 0x42,
+        ];
+
+        for [r, g, b] in colors {
+            buf.push(*r);
+            buf.push(*g);
+            buf.push(*b);
+        }
+
+        self.write_extended_data(&mut buf).await?;
+
+        Ok(())
+    }
+
     /// Writes raw image data to the device, not to be used directly
     async fn send_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
         let mut buf = vec![
