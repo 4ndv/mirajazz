@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - 2026-04-07
+
+### 🚀 Features
+
+- *(device)* Add knob led controls (brightness, individual static color) for supported devices (#11)
+
 ## [0.12.1] - 2026-03-18
 
 ### 🐛 Bug Fixes
