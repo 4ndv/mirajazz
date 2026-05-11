@@ -65,6 +65,12 @@ Example devices: Mirabox N3 rev. 2 (PID 1003), Mirabox N4, Akp03 rev. 2 (PIDs st
 
 In some cases specific devices are not covered just by matching by protocol version
 
+### `with_supports_both_keypress_states(supports: bool)`
+
+Allows to disable handling both "Up" and "Down" states for key presses
+
+Default: true if protocol_version > 2
+
 ### `with_supports_both_encoder_states(supports: bool)`
 
 Allows to disable handling both "Up" and "Down" states for encoder presses
