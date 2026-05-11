@@ -187,6 +187,8 @@ pub struct Device {
     pub firmware_version: Option<String>,
     /// Protocol version
     protocol_version: usize,
+    /// Whether the device is capable of reporting ButtonUp
+    supports_both_keypress_states: bool,
     /// Whether the device is capable of reporting EncoderUp
     supports_both_encoder_states: bool,
     /// Number of keys
@@ -266,6 +268,7 @@ impl Device {
             serial_number,
             firmware_version,
             protocol_version: override_protocol_version,
+            supports_both_keypress_states: override_protocol_version > 2,
             supports_both_encoder_states: override_protocol_version > 2,
             key_count,
             encoder_count,
@@ -288,6 +291,11 @@ impl Device {
         };
 
         Device::read_firmware_version_from_raw_device(&device).await
+    }
+
+    pub fn with_supports_both_keypress_states(mut self, supports: bool) -> Self {
+        self.supports_both_keypress_states = supports;
+        self
     }
 
     pub fn with_supports_both_encoder_states(mut self, supports: bool) -> Self {
@@ -587,6 +595,7 @@ impl Device {
         #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(DeviceStateReader {
             protocol_version: self.protocol_version,
+            supports_both_keypress_states: self.supports_both_keypress_states,
             supports_both_encoder_states: self.supports_both_encoder_states,
             reader: self.reader.clone(),
             states: Mutex::new(DeviceState {
