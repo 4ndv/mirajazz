@@ -35,6 +35,7 @@ pub struct DeviceState {
 /// You can only have one active reader per device at a time
 pub struct DeviceStateReader {
     pub protocol_version: usize,
+    pub supports_both_keypress_states: bool,
     pub supports_both_encoder_states: bool,
     pub reader: Arc<Mutex<DeviceReader>>,
     pub states: Mutex<DeviceState>,
@@ -42,11 +43,6 @@ pub struct DeviceStateReader {
 }
 
 impl DeviceStateReader {
-    /// Checks if protocol version supports both keypress states
-    pub fn supports_both_states(&self) -> bool {
-        self.protocol_version > 2
-    }
-
     /// Reads data from device
     pub async fn raw_read_data(&self, length: usize) -> Result<Vec<u8>, MirajazzError> {
         let mut buf = vec![0u8; length];
@@ -109,7 +105,7 @@ impl DeviceStateReader {
             return Ok(DeviceInput::NoData);
         }
 
-        let state = if self.supports_both_states() {
+        let state = if self.supports_both_keypress_states {
             data[10]
         } else {
             0x1u8
@@ -137,7 +133,7 @@ impl DeviceStateReader {
                 for (index, (their, mine)) in
                     zip(buttons.iter(), my_states.buttons.iter()).enumerate()
                 {
-                    if !self.supports_both_states() {
+                    if !self.supports_both_keypress_states {
                         if *their {
                             updates.push(DeviceStateUpdate::ButtonDown(index as u8));
                             updates.push(DeviceStateUpdate::ButtonUp(index as u8));
