@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2026-05-12
+
+### 🚀 Features
+
+- *(device)* Add support for both keypress states
+
+### 📚 Documentation
+
+- *(README)* Add support for keypress states
+
 ## [0.13.0] - 2026-04-07
 
 ### 🚀 Features
