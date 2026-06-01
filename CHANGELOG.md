@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2026-06-01
+
+### 🚜 Refactor
+
+- *(device)* Use HashMap for image cache to avoid flushing same button twice
+
+### ⚙️ Miscellaneous Tasks
+
+- *(example)* Fix broken examples after changing firmware_version to Option
+
 ## [0.14.0] - 2026-05-12
 
 ### 🚀 Features
