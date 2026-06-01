@@ -31,7 +31,7 @@ async fn main() -> Result<(), MirajazzError> {
 
         // Print out some info from the device
         println!(
-            "Connected to '{}', fw: {}",
+            "Connected to '{}', fw: {:?}",
             device.serial_number(),
             device.firmware_version
         );
