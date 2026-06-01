@@ -481,6 +481,8 @@ impl Device {
 
         self.write_extended_data(&mut buf).await?;
 
+        self.image_cache.lock().await.remove(&key);
+
         Ok(())
     }
 
@@ -497,6 +499,8 @@ impl Device {
 
             self.write_extended_data(&mut buf).await?;
         }
+
+        self.image_cache.lock().await.clear();
 
         Ok(())
     }
