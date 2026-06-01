@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.1] - 2026-06-01
+
+### 🐛 Bug Fixes
+
+- *(device)* Remove related entries from image cache when clearing button image / whole screen
+
 ## [0.15.0] - 2026-06-01
 
 ### 🚜 Refactor
