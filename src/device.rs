@@ -170,11 +170,6 @@ impl DeviceWatcher {
     }
 }
 
-struct ImageCache {
-    key: u8,
-    image_data: Vec<u8>,
-}
-
 /// Interface for a device
 pub struct Device {
     /// Vendor ID of the device
@@ -202,7 +197,7 @@ pub struct Device {
     /// Device writer
     writer: Arc<Mutex<DeviceWriter>>,
     /// Temporarily cache the image before sending it to the device
-    image_cache: Mutex<Vec<ImageCache>>,
+    image_cache: Mutex<HashMap<u8, Vec<u8>>>,
     /// Device needs to be initialized
     initialized: AtomicBool,
 }
@@ -275,7 +270,7 @@ impl Device {
             reader: Arc::new(Mutex::new(reader)),
             writer: Arc::new(Mutex::new(writer)),
             packet_size: if protocol_version >= 2 { 1024 } else { 512 },
-            image_cache: Mutex::new(vec![]),
+            image_cache: Mutex::new(HashMap::new()),
             initialized: false.into(),
         })
     }
@@ -455,12 +450,10 @@ impl Device {
     /// Writes image data to device, changes must be flushed with [Device::flush] before
     /// they will appear on the device!
     pub async fn write_image(&self, key: u8, image_data: &[u8]) -> Result<(), MirajazzError> {
-        let cache_entry = ImageCache {
-            key,
-            image_data: image_data.to_vec(), // Convert &[u8] to Vec<u8>
-        };
-
-        self.image_cache.lock().await.push(cache_entry);
+        self.image_cache
+            .lock()
+            .await
+            .insert(key, image_data.to_vec());
 
         Ok(())
     }
@@ -573,14 +566,12 @@ impl Device {
             return Ok(());
         }
 
-        for image in cache.iter() {
-            self.send_image(image.key, &image.image_data).await?;
+        for (key, image_data) in cache.drain() {
+            self.send_image(key, &image_data).await?;
         }
 
         let mut buf = vec![0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x53, 0x54, 0x50];
         self.write_extended_data(&mut buf).await?;
-
-        cache.clear();
 
         Ok(())
     }
