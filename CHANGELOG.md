@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0] - 2026-06-28
+
+### 🚀 Features
+
+- Switch to the Lanczos3 filter when resizing (#16)
+
+### 💼 Other
+
+- *(deps)* Bump async-hid
+
 ## [0.15.1] - 2026-06-01
 
 ### 🐛 Bug Fixes
