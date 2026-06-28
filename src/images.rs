@@ -13,7 +13,7 @@ fn convert_image_with_format_impl(
     // Ensuring size of the image
     let (ws, hs) = image_format.size;
 
-    let image = image.resize_exact(ws as u32, hs as u32, FilterType::Nearest);
+    let image = image.resize_exact(ws as u32, hs as u32, FilterType::Lanczos3);
 
     // Applying rotation
     let image = match image_format.rotation {
