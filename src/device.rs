@@ -5,6 +5,7 @@ use async_hid::{
 use futures_lite::{Stream, StreamExt};
 use image::DynamicImage;
 use std::{
+    cell::Cell,
     collections::{HashMap, HashSet},
     convert::identity,
     sync::{
@@ -200,6 +201,8 @@ pub struct Device {
     image_cache: Mutex<HashMap<u8, Vec<u8>>>,
     /// Device needs to be initialized
     initialized: AtomicBool,
+    /// Last used brightness value
+    brightness: Cell<u8>,
 }
 
 /// Static functions of the struct
@@ -272,6 +275,7 @@ impl Device {
             packet_size: if protocol_version >= 2 { 1024 } else { 512 },
             image_cache: Mutex::new(HashMap::new()),
             initialized: false.into(),
+            brightness: Cell::new(100),
         })
     }
 
@@ -365,8 +369,9 @@ impl Device {
     pub async fn reset(&self) -> Result<(), MirajazzError> {
         self.initialize().await?;
 
-        self.set_brightness(100).await?;
         self.clear_all_button_images().await?;
+        self.set_brightness(self.brightness.get()).await?;
+        self.flush().await?;
 
         Ok(())
     }
@@ -376,6 +381,7 @@ impl Device {
         self.initialize().await?;
 
         let percent = percent.clamp(0, 100);
+        self.brightness.set(percent);
 
         let mut buf = vec![
             0x00, 0x43, 0x52, 0x54, 0x00, 0x00, 0x4c, 0x49, 0x47, 0x00, 0x00, percent,
