@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.2] - 2026-08-01
+
+### 🐛 Bug Fixes
+
+- *(device)* Use Arc+Mutex instead of Cell
+
 ## [0.16.1] - 2026-08-01
 
 ### 🚀 Features
