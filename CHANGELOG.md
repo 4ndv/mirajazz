@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### 🚀 Features
+
+- *(device)* Add `with_report_id` for devices using a non-zero HID report ID
+
+  Almost every device in this family uses report ID `0x00`, but some (Mirabox K1 Pro,
+  `6603:1015`) use a non-zero one and silently ignore reports sent with `0x00`. The same ID is
+  prefixed to the *incoming* reports, shifting `ACK` and the input/state pair one byte along, so
+  both directions are derived from this single value.
+
+- *(images)* Add `ImageFormat::max_bytes` to cap the encoded payload
+
+  Some devices render an upload spanning more than one data report as a torn or half-drawn
+  frame, and which payloads trip it is not predictable from the bytes. When `max_bytes` is set,
+  the JPEG encoder steps quality down until the output fits.
+
+- *(example)* Add Mirabox K1 Pro example
+
+  Covers the four things that are specific to it: the `0x04` report ID, synthesised knob
+  releases, the right-to-left key order and the payload cap.
+
+### 🚜 Refactor
+
+- *(images)* `convert_image_with_format` returns `MirajazzError` instead of `ImageError`
+
+### ⚠️ Breaking
+
+- `ImageFormat` gained the `max_bytes` field, so struct literals need `max_bytes: None`
+- `convert_image_with_format` error type changed
+- `DeviceStateReader` gained the public `report_id` field
+
 ## [0.16.2] - 2026-08-01
 
 ### 🐛 Bug Fixes
