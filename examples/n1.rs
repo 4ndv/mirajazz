@@ -30,6 +30,7 @@ const IMAGE_FORMAT: ImageFormat = ImageFormat {
     size: (96, 96),
     rotation: ImageRotation::Rot0,
     mirror: ImageMirroring::None,
+    max_bytes: None,
 };
 
 const TOP_ROW_IMAGE_FORMAT: ImageFormat = ImageFormat {
@@ -37,6 +38,7 @@ const TOP_ROW_IMAGE_FORMAT: ImageFormat = ImageFormat {
     size: (64, 64),
     rotation: ImageRotation::Rot0,
     mirror: ImageMirroring::None,
+    max_bytes: None,
 };
 
 #[tokio::main]

@@ -12,6 +12,7 @@ const IMAGE_FORMAT: ImageFormat = ImageFormat {
     size: (60, 60),
     rotation: ImageRotation::Rot0,
     mirror: ImageMirroring::None,
+    max_bytes: None,
 };
 
 #[tokio::main]

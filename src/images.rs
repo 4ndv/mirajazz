@@ -1,15 +1,22 @@
 use image::codecs::bmp::BmpEncoder;
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
-use image::{ColorType, DynamicImage, GenericImageView, ImageError};
+use image::{ColorType, DynamicImage, GenericImageView};
 
 use crate::error::MirajazzError;
 use crate::types::{ImageFormat, ImageMirroring, ImageMode, ImageRotation};
 
+/// Quality used for every JPEG we hand to a device
+const JPEG_QUALITY: u8 = 90;
+
+/// Lowest quality worth falling back to when squeezing under a device's payload limit.
+/// Below this the artwork is degraded enough that rendering it correctly is little help.
+const MIN_JPEG_QUALITY: u8 = 10;
+
 fn convert_image_with_format_impl(
     image_format: ImageFormat,
     image: DynamicImage,
-) -> Result<Vec<u8>, ImageError> {
+) -> Result<Vec<u8>, MirajazzError> {
     // Ensuring size of the image
     let (ws, hs) = image_format.size;
 
@@ -43,10 +50,43 @@ fn convert_image_with_format_impl(
             Ok(buf)
         }
         ImageMode::JPEG => {
-            let mut buf = Vec::new();
-            let mut encoder = JpegEncoder::new_with_quality(&mut buf, 90);
-            encoder.encode(&image_data, ws as u32, hs as u32, ColorType::Rgb8.into())?;
-            Ok(buf)
+            let encode = |quality: u8| -> Result<Vec<u8>, MirajazzError> {
+                let mut buf = Vec::new();
+                let mut encoder = JpegEncoder::new_with_quality(&mut buf, quality);
+                encoder.encode(&image_data, ws as u32, hs as u32, ColorType::Rgb8.into())?;
+                Ok(buf)
+            };
+
+            let buf = encode(JPEG_QUALITY)?;
+
+            let Some(max_bytes) = image_format.max_bytes else {
+                return Ok(buf);
+            };
+            if buf.len() <= max_bytes {
+                return Ok(buf);
+            }
+
+            // Some devices render an upload spanning more than one data report as a torn
+            // or half-drawn frame, and which payloads trip it is not predictable from the
+            // bytes: well-formed JPEGs a hundred bytes apart in size behave differently.
+            // Staying under the limit is the only reliable lever, so step quality down
+            // until it fits, keeping the smallest result if nothing does.
+            // Step by one: coarser steps skip qualities that would have fitted, and
+            // encoding an icon-sized image is cheap enough that the extra attempts do
+            // not matter.
+            let mut smallest = buf;
+            for quality in (MIN_JPEG_QUALITY..JPEG_QUALITY).rev() {
+                let candidate = encode(quality)?;
+                let fits = candidate.len() <= max_bytes;
+                if candidate.len() < smallest.len() {
+                    smallest = candidate;
+                }
+                if fits {
+                    break;
+                }
+            }
+
+            Ok(smallest)
         }
     }
 }
@@ -55,7 +95,7 @@ fn convert_image_with_format_impl(
 pub async fn convert_image_with_format(
     image_format: ImageFormat,
     image: DynamicImage,
-) -> Result<Vec<u8>, ImageError> {
+) -> Result<Vec<u8>, MirajazzError> {
     tokio::task::block_in_place(move || convert_image_with_format_impl(image_format, image))
 }
 
