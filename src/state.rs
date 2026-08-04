@@ -37,6 +37,9 @@ pub struct DeviceStateReader {
     pub protocol_version: usize,
     pub supports_both_keypress_states: bool,
     pub supports_both_encoder_states: bool,
+    /// HID report ID of the device. A non-zero ID is also present on incoming reports,
+    /// shifting every field in them by one byte.
+    pub report_id: u8,
     pub reader: Arc<Mutex<DeviceReader>>,
     pub states: Mutex<DeviceState>,
     pub process_input: fn(u8, u8) -> Result<DeviceInput, MirajazzError>,
@@ -99,19 +102,29 @@ impl DeviceStateReader {
 
         let data = data.unwrap();
 
+        // Devices with a non-zero report ID prefix incoming reports with it too, pushing
+        // every field one byte along. Everything below is relative to the payload start.
+        let offset = if self.report_id == 0 { 0 } else { 1 };
+
         // Skip this check if protocol version is 0, because devices with very old firmware
         // do not prefix packets with ACK (65 67 75)
-        if !data.starts_with(&[65, 67, 75]) && self.protocol_version > 0 {
+        let is_ack = data.get(offset..offset + 3) == Some(&[65, 67, 75][..]);
+        if !is_ack && self.protocol_version > 0 {
+            return Ok(DeviceInput::NoData);
+        }
+
+        // Guard against a short read: the input/state pair lives at payload [9]/[10]
+        if data.len() < offset + 11 {
             return Ok(DeviceInput::NoData);
         }
 
         let state = if self.supports_both_keypress_states {
-            data[10]
+            data[offset + 10]
         } else {
             0x1u8
         };
 
-        Ok(process_input(data[9], state)?)
+        Ok(process_input(data[offset + 9], state)?)
     }
 
     /// Reads states and returns updates

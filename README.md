@@ -77,6 +77,17 @@ Allows to disable handling both "Up" and "Down" states for encoder presses
 
 Default: true if protocol_version > 2
 
+### `with_report_id(report_id: u8)`
+
+Sets the HID report ID used for every report exchanged with the device. A non-zero ID is also
+present on the incoming reports, shifting every field in them by one byte, which the library
+handles from the same value.
+
+Example device: Mirabox K1 Pro (PID 1015), which uses `0x04` and silently ignores reports sent
+with `0x00`
+
+Default: 0x00
+
 ## Current limitations
 
 - Depends on tokio for wrapping synchronous image manipulation tasks

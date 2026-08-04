@@ -192,6 +192,11 @@ pub struct Device {
     encoder_count: usize,
     /// Packet size
     packet_size: usize,
+    /// HID report ID prefixed to every outgoing report.
+    ///
+    /// Almost every device in this family uses `0x00`, but some (e.g. the Mirabox K1 Pro)
+    /// use a non-zero ID, which also shifts every offset in the *incoming* reports by one.
+    report_id: u8,
     /// Device reader
     reader: Arc<Mutex<DeviceReader>>,
     /// Device writer
@@ -272,6 +277,7 @@ impl Device {
             reader: Arc::new(Mutex::new(reader)),
             writer: Arc::new(Mutex::new(writer)),
             packet_size: if protocol_version >= 2 { 1024 } else { 512 },
+            report_id: 0x00,
             image_cache: Mutex::new(HashMap::new()),
             initialized: false.into(),
             brightness: Arc::new(Mutex::new(100)),
@@ -298,6 +304,18 @@ impl Device {
 
     pub fn with_supports_both_encoder_states(mut self, supports: bool) -> Self {
         self.supports_both_encoder_states = supports;
+        self
+    }
+
+    /// Sets the HID report ID used for every report exchanged with the device.
+    ///
+    /// Defaults to `0x00`, which is correct for almost every device. Mirabox K1 Pro
+    /// (`6603:1015`) uses `0x04`; sending `0x00` to it is silently ignored by the hardware,
+    /// and its incoming reports are prefixed with the same ID, so `ACK` lands at offset 1
+    /// and the input/state pair at `[10]`/`[11]` instead of `[9]`/`[10]`. Both directions
+    /// are handled from this one value.
+    pub fn with_report_id(mut self, report_id: u8) -> Self {
+        self.report_id = report_id;
         self
     }
 
@@ -343,6 +361,10 @@ impl Device {
 
     pub fn supports_both_encoder_states(&self) -> bool {
         self.supports_both_encoder_states
+    }
+
+    pub fn report_id(&self) -> u8 {
+        self.report_id
     }
 
     /// Initializes the device
@@ -600,6 +622,7 @@ impl Device {
             protocol_version: self.protocol_version,
             supports_both_keypress_states: self.supports_both_keypress_states,
             supports_both_encoder_states: self.supports_both_encoder_states,
+            report_id: self.report_id,
             reader: self.reader.clone(),
             states: Mutex::new(DeviceState {
                 buttons: vec![false; self.key_count],
@@ -625,7 +648,7 @@ impl Device {
 
             // Header
             buf.clear();
-            buf.push(0x00);
+            buf.push(self.report_id);
             buf.extend(&image_data[bytes_sent..bytes_sent + this_length]);
 
             // Adding padding
@@ -651,8 +674,12 @@ impl Device {
     }
 
     /// Writes data to device extending payload to the required size
+    ///
+    /// The leading byte of `payload` is the HID report ID. Callers build their buffers with a
+    /// `0x00` placeholder there, so stamp the device's actual report ID over it
     pub async fn write_extended_data(&self, payload: &mut Vec<u8>) -> Result<(), MirajazzError> {
         payload.resize(1 + self.packet_size, 0);
+        payload[0] = self.report_id;
 
         self.write_data(payload).await
     }
