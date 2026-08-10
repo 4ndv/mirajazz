@@ -136,7 +136,13 @@ impl DeviceWatcher {
                         let device = HidBackend::default()
                             .query_devices(&device_id)
                             .await
-                            .unwrap()
+                            // A `Connected` event can race device initialization on the
+                            // backend, making `query_devices` transiently fail (e.g.
+                            // `NotConnected`), most often on a rapid disconnect/reconnect.
+                            // Don't panic: skip this event so the watcher keeps running.
+                            // The device is still discoverable via `list_devices` and will
+                            // be reported again on the next transition.
+                            .ok()?
                             .filter_map(|d| check_device(d, queries))
                             .last()?;
 
