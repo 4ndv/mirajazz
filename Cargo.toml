@@ -24,3 +24,7 @@ tokio = { version = "1.45.1", features = ["full"] }
 [[example]]
 name = "akp03r"
 path = "examples/akp03r.rs"
+
+[[example]]
+name = "k1pro"
+path = "examples/k1pro.rs"

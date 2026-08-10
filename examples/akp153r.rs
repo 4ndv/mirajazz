@@ -15,6 +15,7 @@ const IMAGE_FORMAT: ImageFormat = ImageFormat {
     size: (85, 85),
     rotation: ImageRotation::Rot90,
     mirror: ImageMirroring::Both,
+    max_bytes: None,
 };
 
 /// Converts opendeck key index to device key index

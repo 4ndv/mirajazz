@@ -44,6 +44,12 @@ pub struct ImageFormat {
     pub rotation: ImageRotation,
     /// Image mirroring
     pub mirror: ImageMirroring,
+    /// Largest encoded payload the device renders reliably, in bytes.
+    ///
+    /// `None` means no limit. When set, the encoder lowers JPEG quality until the output
+    /// fits, because some devices decode larger uploads incorrectly — see
+    /// [crate::images::convert_image_with_format].
+    pub max_bytes: Option<usize>,
 }
 
 impl Default for ImageFormat {
@@ -53,6 +59,7 @@ impl Default for ImageFormat {
             size: (0, 0),
             rotation: ImageRotation::Rot0,
             mirror: ImageMirroring::None,
+            max_bytes: None,
         }
     }
 }
