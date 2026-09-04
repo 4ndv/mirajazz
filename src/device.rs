@@ -394,6 +394,24 @@ impl Device {
         Ok(())
     }
 
+    /// Enables/disables vibration on N4 Pro-family devices via the QUCMD
+    /// firmware config command. Byte layout matches what Mirabox's official
+    /// app sends; see `streamdockN4Pro.h` in Mirabox's SDK.
+    pub async fn set_vibration(&self, enabled: bool) -> Result<(), MirajazzError> {
+        self.initialize().await?;
+
+        let vib = if enabled { 0x11 } else { 0xFF };
+        let mut buf = vec![
+            0x00, 0x43, 0x52, 0x54, 0x00, 0x00, // CRT header
+            0x51, 0x55, 0x43, 0x4d, 0x44, // "QUCMD"
+            0x1f, 0x11, 0x00, vib, 0x00, 0x11, // 6-byte N4Pro config array
+        ];
+
+        self.write_extended_data(&mut buf).await?;
+
+        Ok(())
+    }
+
     /// Sets brightness of the knob LEDs, value range is 0 - 100
     pub async fn set_led_brightness(&self, percent: u8) -> Result<(), MirajazzError> {
         self.initialize().await?;
