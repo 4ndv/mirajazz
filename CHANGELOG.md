@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.3] - 2026-10-24
+
+### 🚀 Features
+
+- Set_vibration for N4 Pro-family devices
+
+### ⚙️ Miscellaneous Tasks
+
+- Add AI_POLICY.md and AGENTS.md
+- Add pull request template
+- Typo
+
 ## [0.16.2] - 2026-08-01
 
 ### 🐛 Bug Fixes

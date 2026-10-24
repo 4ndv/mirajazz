@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "mirajazz"
-version = "0.16.2"
+version = "0.16.3"
 dependencies = [
  "async-hid",
  "futures-lite",
